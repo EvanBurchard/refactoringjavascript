@@ -1,0 +1,26 @@
+{
+    "extends": "airbnb-base",
+    "plugins": [
+        "import"
+    ],
+
+
+    "rules": {
+      "space-before-blocks": 0,
+      "no-bitwise": 1,
+      "no-extra-semi": 0,
+      "import/no-extraneous-dependencies": 0,
+      "import/newline-after-import": 0,
+      "semi": 2,
+      "space-before-function-paren": 0,
+      "brace-style": 0,
+      "space-infix-ops": 0,
+      "indent": 0,
+      "keyword-spacing": 0,
+      "no-var": 1,
+      "no-else-return": 1,
+      "prefer-arrow-callback": 1,
+      "no-use-before-define": 1,
+      "prefer-template": 1
+    }
+}

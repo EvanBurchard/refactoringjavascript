@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <section data-type="chapter" id="asynchronous-refactoring-NOZu3">
+<h1>Asynchronous Refactoring</h1>
+
+<p>In this chapter, we'll discuss asynchronous programming in JavaScript, by covering the following topics:</p>
+
+<ul>
+	<li>Why Async?</li>
+	<li>Fixing the "Pyramid of Doom"</li>
+	<li>Testing Async code</li>
+	<li>Promises</li>
+</ul>
+
+<section data-type="sect1" id="why-async-M0umTv">
+<h1>Why Async?</h1>
+
+<p>Before we get into how to make asynchronous JavaScript better through refactoring, it's worth discussing why we need it. Why shouldn't just use a "simpler" synchronous style and not worry about async at all?</p>
+
+<p>As a practical concern, we want our programs to be performant. Despite our focus in this book being interfaces rather than performance, there is another issue, even if we thought it was ok to hold up our whole program for a web request or data processing task that could take seconds, minutes, or even longer.</p>
+
+<p>Sometimes async is the only option for a given module or library. Async has become the norm for many APIs. For example, one coming from a mostly synchronous paradigm (language or style) might expect node's <code>http</code> module to behave like this:</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+const response = http.get('http://refactoringjs.com')
+console.log(response.body);
+</pre>
+
+<p>But this will print <code>undefined</code>. The reason is that our <code>response</code> constant is actually named a bit optimistically. The return value of <code>http.get</code> is a <code>ClientRequest</code> object, not a response at all. It describes the request, but not the result.</p>
+
+<p>There are good reasons to use asynchronous remote http calls. If our remote call was synchronous, it would necessarily "stop the world" (STW) and keep our program waiting. Still, when looking at the immediate alternative, this compromise may feel frustratingly complex:</p>
+
+<pre data-type="programlisting">
+http.get('http://refactoringjs.com', (result) =&gt; {
+&nbsp; result.on('data', (chunk) =&gt; {
+&nbsp;&nbsp;&nbsp; console.log(chunk.toString());
+&nbsp; });
+});
+</pre>
+
+<div data-type="note" id="why-tostring-8LcACBTm"><h6>Note</h6>
+<h1>Why toString()?</h1>
+
+<p><code>chunk</code> is a <code>Buffer</code> of characters. Try leaving off the <code>toString()</code>, and you'll see something like <code>&lt;Buffer 3c 21 44 4f 43 ... etc&gt;</code>.</p>
+</div>
+
+<p>This is clearly a more complicated process than what we had from our idea of how a synchronous http API would function. It not only forces the asynchronous style, but the functional paradigm as well. We have two inner asynchronous functions. If you try to cling to using synchronous style coding beyond this initial call, your frustration won't stop:</p>
+
+<pre data-type="programlisting">
+let theResult = [];
+http.get('http://refactoringjs.com', (result) =&gt; {
+&nbsp; result.on('data', (chunk) =&gt; {
+&nbsp;&nbsp;&nbsp; theResult.push(chunk);
+&nbsp; });
+});
+console.log(theResult);
+</pre>
+
+<p>Now we can get an array of the chunks of the response, right? Nope. This prints an empty array: <code>[]</code>.</p>
+
+<p>The reason is that the <code>http.get</code> function <em>returns</em> right away, and <code>console.log</code> is evaluated before the chunks are pushed onto the array in the callback. In other words:</p>
+
+<pre data-type="programlisting">
+http.get('http://refactoringjs.com', (result) =&gt; {
+&nbsp; result.on('data', (chunk) =&gt; {
+&nbsp;&nbsp;&nbsp; console.log('this prints after (also twice)');
+&nbsp; });
+});
+console.log('this prints first');
+</pre>
+
+<p>The last line prints before the innermost function has a chance to execute the third line (incidentally, it prints that logging statement twice). So if it's just a matter of waiting, and we want to do something with the chunks, we should just be able to wait, right? But how long do we wait? Is 500 milliseconds enough time?</p>
+
+<pre data-type="programlisting">
+let theResult = [];
+http.get('http://refactoringjs.com', (result) =&gt; {
+&nbsp; result.on('data', (chunk) =&gt; {
+&nbsp;&nbsp;&nbsp; theResult.push(chunk);
+&nbsp; });
+});
+setTimeout(function(){console.log(theResult)}, 500);
+</pre>
+
+<p>It's hard to say. Using this approach, we might end up with an empty array, or an array with one or more elements. If we really want to be sure that the data is in place before we log it (or do anything else with it), we'll end up waiting too much, and tying up our program too. If we wait too little, we'll miss some data. So this solution isn't very good. Not only is it unpredictable, it involves setting state through a side-effect.</p>
+
+<aside data-type="sidebar" id="settimeout-and-the-event-loop-3ASVTyTa">
+<h5><code>setTimeout</code> and the event loop</h5>
+
+<p>It is worth noting that <code>setTimeout(myFunction, 300)</code> doesn't necessarily execute <code>myFunction</code> after 300 milliseconds. What it does is first return (in node, if you assign with <code>x = setTimeout(myFunction, 300)</code>, you'll see that it returns a <code>Timeout</code> object), and then add the function to the event loop to be executed after <code>300</code> ms has passed.</p>
+
+<p>There are two questions to keep in mind with this type of situation. First, will the event loop be stuck doing something else at 300 milliseconds? Maybe.</p>
+
+<p>Second, does code execute immediately when given a timeout of 0 milliseconds? In other words, what executes first?</p>
+
+<pre data-type="programlisting">
+setTimeout(() =&gt; {console.log('the chicken')}, 0);
+console.log('the egg');
+</pre>
+
+<p>In this case, <code>"the egg"</code> will get printed first.</p>
+
+<p>What about this?</p>
+
+<pre data-type="programlisting">
+setTimeout(() =&gt; {console.log('the chicken')}, 2);
+setTimeout(() =&gt; {console.log('the chicken 2')}, 0);
+setTimeout(() =&gt; {console.log('the chicken 3')}, 1);
+setTimeout(() =&gt; {console.log('the chicken 4')}, 1);
+setTimeout(() =&gt; {console.log('the chicken 5')}, 1);
+setTimeout(() =&gt; {console.log('the chicken 6')}, 1);
+setTimeout(() =&gt; {console.log('the chicken 7')}, 0);
+setTimeout(() =&gt; {console.log('the chicken 8')}, 2);
+console.log('the egg');
+</pre>
+
+<p>The egg wins again, but the chickens are all over the place. Try running in different browser consoles and on node. As of this writing, the order on chrome and firefox are different but consistent. The order on node varies from run to run.</p>
+</aside>
+
+<p>With the problems of the <code>setTimeout</code> approaches, it looks like we're better off going back to our first async method (code sample 2), but is that really the best way to write it?</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect1" id="fixing-the-pyramid-of-doom-leuQsW">
+<h1>Fixing The Pyramid of Doom</h1>
+
+<p>If you're unfamiliar with the term "pyramid of doom" or the often related "callback hell," they can both refer to code in the following form:</p>
+
+<pre data-type="programlisting">
+levelOne(function(){
+  levelTwo(function(){
+    levelThree(function(){
+      levelFour(function(){
+        // some code here
+&nbsp;&nbsp;  &nbsp; });
+    });
+  });&nbsp;&nbsp;&nbsp;&nbsp;
+});
+</pre>
+
+<p>The "pyramid of doom" refers to the shape where code creeps to the right with many levels of indentation. "Callback hell" is less about the shape of the code, and more of a description of code that follows many layers of callback functions.</p>
+
+<section data-type="sect2" id="extracting-functions-into-a-containing-object-5VudIksZ">
+<h2>Extracting Functions into a Containing Object</h2>
+
+<p>Back to the code from the last section, clearly, we're going to want some asynchronous form here, but how do we manage the complexity and nesting required with something like this?</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+http.get('http://refactoringjs.com', (result) =&gt; {
+&nbsp; result.on('data', (chunk) =&gt; {
+&nbsp;&nbsp;&nbsp; console.log(chunk.toString());
+&nbsp; });
+});</pre>
+
+<p>Note that this could be much more complicated with many more levels of nesting. This anti-pattern is called the "pyramid of doom" or "callback hell." There's no strict line for how much indentation constitute a pyramid or how many callbacks put you in "hell."</p>
+
+<p>We already have a strategy for this from previous parts of the book. We simply de-anonymize and extract a function like this:</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+function printBody(chunk){
+&nbsp; console.log(chunk.toString());
+};
+
+http.get('http://refactoringjs.com', (result) =&gt; {
+&nbsp; result.on('data', printBody);
+});
+</pre>
+
+<p>And we could even name and extract another:</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+function printBody(chunk){
+&nbsp; console.log(chunk);
+};
+
+function getResults(result){
+&nbsp; result.on('data', printBody);
+};
+
+http.get('http://refactoringjs.com', getResults);
+</pre>
+
+<p>Now we're left with two named functions and the last line as a piece of "client" or "calling" code.</p>
+
+<p>Because this is a <em>streaming</em> api, delivering "chunks" of data rather than the full html body at once, our code would currently put a line break between chunks. Let's avoid that with an array to capture the results:</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+let bodyArray = [];
+const saveBody = function(chunk){
+&nbsp; bodyArray.push(chunk);
+};
+const printBody = function(){
+&nbsp; console.log(bodyArray.join(''))
+};
+const getResults = function(result){
+&nbsp; result.on('data', saveBody);
+&nbsp; result.on('end', printBody);
+};
+
+http.get('http://refactoringjs.com', getResults);
+</pre>
+
+<p>Note that we had to add a new event handler for the <code>'end'</code> event, and we no longer need the <code>toString</code> because our <code>join</code> function is smart enough to coerce the buffers into one string. Now that we have extracted our functions and are printing properly, we might be tempted to further change the code by moving this into an object, exporting a module, and defining our public interface by some combination of _privateFunctions (with an underscore), classes, factory functions, or constructor functions. Depending on what you liked from the previous chapters (especially Chapters 5, 6, and 7) and your own style, any of these might seem overkill or prudent.</p>
+
+<p>If you do decide to move things into an object, one thing to be aware of is how easily the <code>this</code> context will get dropped:</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+const getBody = {
+&nbsp; bodyArray: [],
+&nbsp; saveBody: function(chunk){
+&nbsp;&nbsp;&nbsp; this.bodyArray.push(chunk);
+&nbsp; },
+&nbsp; printBody: function(){
+&nbsp;&nbsp;&nbsp; console.log(this.bodyArray.join(''))
+&nbsp; },
+&nbsp; getResult: function(result){
+&nbsp;&nbsp;&nbsp; result.on('data', this.saveBody);
+&nbsp;&nbsp;&nbsp; result.on('end', this.printBody);
+&nbsp; }
+};
+
+http.get('http://refactoringjs.com', getBody.getResult);
+</pre>
+
+<p>This code will lead to the following error:</p>
+
+<pre data-type="programlisting">
+TypeError: "listener" argument must be a function</pre>
+
+<p>This means that in the last line, <code>getBody.getResult</code> is not a function. Changing that last line gets us a bit further:</p>
+
+<pre data-type="programlisting">
+http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+</pre>
+
+<p>But we still get an error from pushing onto the <code>bodyArray</code>:</p>
+
+<pre data-type="programlisting">
+TypeError: Cannot read property 'push' of undefined</pre>
+
+<p>To get everything passing around this properly to the callbacks, we'll need our code to <code>bind</code> <code>this</code> for the callbacks of the events in <code>getResult</code> as well:</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+const getBody = {
+&nbsp; bodyArray: [],
+&nbsp; saveBody: function(chunk){
+&nbsp;&nbsp;&nbsp; this.bodyArray.push(chunk);
+&nbsp; },
+&nbsp; printBody: function(){
+&nbsp;&nbsp;&nbsp; console.log(this.bodyArray.join(''))
+&nbsp; },
+&nbsp; getResult: function(result){
+&nbsp;&nbsp;&nbsp; result.on('data', this.saveBody.bind(this));
+&nbsp;&nbsp;&nbsp; result.on('end', this.printBody.bind(this));
+&nbsp; }
+};
+
+http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+</pre>
+
+<p>Is it worth putting this in an object? Is it worth disabling what was a fairly shallow "pyramid of doom?" Did we eliminate "callback hell?" Maybe not, but it's good to have options. We'll stick with this form to start the next section.</p>
+
+<p>Before moving on, there are two critical things for us to notice.</p>
+
+<p>First, by relying on callbacks to do the real work of our program, we're also counting on side-effects. We've left the simple world of returning values. We're not even just <em>returning</em> values from functions. We're running them (and returning <em>right away</em> with nothing of value<em>)</em>, but the callbacks will run <em>sometime</em>. Our fundamental basis for achieving confidence relies on knowing what's happening in our code, and async in JavaScript, as we know it so far, completely undermines this.</p>
+
+<p>Second, and completely related to the first, we don't have any tests! But what would we test anyways? Let's start with our old assumptions about how testing works, and try to test some known value. We know that after the function is executed, the <code>bodyArray</code> should have some data in it. In other words, its length should not be equal to 0.</p>
+</section>
+
+<section data-type="sect2" id="testing-our-asynchronous-program-q3uXsxs6">
+<h2>Testing our Asynchronous Program</h2>
+
+<p>With that in mind, let's work with the testing library from Chapter 9 called "tape." It is a bit simpler than mocha, and we can run it just by running <strong><code>node <em>whatever-you-call-the-file.js</em></code></strong>.</p>
+
+<p>You can install it with <strong><code>npm install tape</code></strong>.</p>
+
+<pre data-type="programlisting">
+const http = require('http');
+const getBody = {
+...
+}
+const test = require('tape');
+test('our async routine', function(assert){
+&nbsp; http.get('http://refactoringjs.com',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; getBody.getResult.bind(getBody));
+&nbsp; assert.notEqual(getBody.bodyArray.length, 0);
+  assert.end();
+});
+</pre>
+
+<p>That test will fail. Why? Because it is executed before <code>bodyArray</code> has a chance to be updated!</p>
+
+<p>You might instinctively want to crawl back into a comfortable synchronous world with an update to your test like this:</p>
+
+<pre data-type="programlisting">
+test('our async routine', function(assert){
+&nbsp; http.get('http://refactoringjs.com',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; getBody.getResult.bind(getBody));
+&nbsp; setTimeout(() =&gt; {
+&nbsp;&nbsp;&nbsp; assert.notEqual(getBody.bodyArray.length, 0);
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; }, 3000);
+});
+</pre>
+
+<p>Here we get a passing test, but it takes 3 seconds to execute.</p>
+
+<p>So how can we delay our assertion until after the <code>bodyArray</code> gets populated?</p>
+
+<p>Because we are testing a side-effect, and our code is not very "callback-friendly", we're stuck with <code>setTimeout</code> check unless we rewrite the code or add some odd machinations to our tests. In an ideal case, <code>printBody</code> would take a callback that would run to indicate that everything is all done.</p>
+
+<p>Trading one blunt tool for another, we can eliminate our reliance on our <code>setTimeout</code> by overwriting the function that we already have that indicates when things are done:</p>
+
+<pre data-type="programlisting">
+test('our async routine', function (assert) {
+&nbsp; getBody.printBody = function(){
+&nbsp;&nbsp;&nbsp; assert.notEqual(getBody.bodyArray.length, 0);
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; }
+&nbsp; http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+});
+</pre>
+
+<p>This might seem outrageous for a couple of reasons. First, it overwrites a function that we may want to test later (will we have to restore the original implementation?). Second, changes to <code>printBody</code>'s implementation could lead to some complexity later. Without introducing mocking, or trying to feed a callback all the way through each function and event, we could do slightly better.</p>
+
+<pre data-type="programlisting">
+const getBody = {
+...
+&nbsp; printBody: function(){
+&nbsp;&nbsp;&nbsp; console.log(this.bodyArray.join(''))
+&nbsp;&nbsp;&nbsp; this.allDone();
+&nbsp; },
+&nbsp; allDone: function(){}
+}
+
+test('our async routine', function (assert) {
+&nbsp; getBody.allDone = function(){
+&nbsp;&nbsp;&nbsp; assert.equal(getBody.bodyArray.length, 2);
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; }
+&nbsp; http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+});
+</pre>
+
+<p>Here, we create a function whose only responsibility is running when <code>printBody</code> runs. Because there is no default implementation, overwriting it for the test is no big deal. We'll just need to reset it in future tests. Here is an additional test added that ensures that setting the <code>bodyArray</code> to <code>[]</code> allows a clean slate:</p>
+
+<pre data-type="programlisting">
+test('our async routine', function (assert) {
+&nbsp; getBody.allDone = function(){
+&nbsp;&nbsp;&nbsp; assert.equal(getBody.bodyArray.length, 2);
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; }
+&nbsp; http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+});
+
+test('our async routine two', function (assert) {
+  getBody.bodyArray = [];
+&nbsp; getBody.allDone = function(){ };
+&nbsp; http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+&nbsp; assert.equal(getBody.bodyArray.length, 0);
+&nbsp; assert.end();
+});
+</pre>
+</section>
+
+<section data-type="sect2" id="additional-testing-considerations-AQuAtzsD">
+<h2>Additional Testing Considerations</h2>
+
+<p>Considering that we also need to reset our <code>bodyArray</code> to an empty array (and revert any other side-effects, such as would appear in a database), one additional upkeep step shouldn't trouble us too much. We can even refactor these steps into simple functions:</p>
+
+<pre data-type="programlisting">
+function setup(){
+&nbsp; getBody.bodyArray = [];
+}
+function teardown(){
+&nbsp; getBody.allDone = function(){ };
+}
+
+test('our async routine', function (assert) {
+&nbsp; setup();
+&nbsp; getBody.allDone = function(){
+&nbsp;&nbsp;&nbsp; assert.equal(getBody.bodyArray.length, 2);
+&nbsp;&nbsp;&nbsp; teardown();
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; }
+&nbsp; http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+});
+
+test('our async routine two', function (assert) {
+&nbsp; setup();
+&nbsp; http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+&nbsp; assert.equal(getBody.bodyArray.length, 0);
+&nbsp; teardown();
+&nbsp; assert.end();
+});
+</pre>
+
+<p>Note that mocha and other more fully featured frameworks try to handle <code>setup</code> and <code>teardown</code> on your behalf. They do ok most of the time, but having explicit <code>setup</code> and <code>teardown</code> functions (as in the last example) gives you more control.</p>
+
+<div data-type="warning" id="test-parallelization-DQc5I6tvsB"><h6>Warning</h6>
+<h1>Test parallelization</h1>
+
+<p>No framework will save you from tests running in parallel and clobbering shared state. The solution to this to run tests that share state serially (as a tape test file will do). And for disparate aspects of the code, splitting these into modules and giving each its own chance to run independently and in parallel will still let you have speedy, parallel test runs.</p>
+
+<p>Architecturally, splitting your code into modules is probably what you wanted to do anyways, right?</p>
+
+<p>If that sounds like to much work, go with mocha or something else that handles setup/teardown. But don't be surprised if you still have an occasional parallelization problem (most likely resulting in test failures).</p>
+</div>
+
+<p>Let's take care of that function reassignment using "testdouble" (<strong><code>npm install testdouble</code></strong>).</p>
+
+<pre data-type="programlisting">
+const testDouble = require('testdouble');
+
+function setup(){
+&nbsp; getBody.bodyArray = [];
+}
+function teardown(){
+&nbsp; getBody.allDone = function(){ };
+}
+test('our async routine', function (assert) {
+&nbsp; getBody.allDone = testDouble.function();
+&nbsp; testDouble.when(getBody.allDone()).thenDo(function(){
+&nbsp;&nbsp;&nbsp; assert.notEqual(getBody.bodyArray.length, 0)
+&nbsp;&nbsp;&nbsp; assert.end()
+&nbsp; });
+&nbsp; http.get('http://refactoringjs.com', getBody.getResult.bind(getBody));
+});
+</pre>
+
+<p>When we make a test double like this for our function (we could also do it for whole objects), our code can now just "fake" the call to <code>allDone</code>. More typically, doubles are used to avoid performing expensive or otherwise slow operations (such as calling an external API), but be wary of using this technique too much, as it is possible to fake everything, which results in useless tests. One thing to notice is how convenient our <code>teardown</code> is. It's easy to reassign this one empty function, but if we were creating a double of more functions (mocking, stubbing, spying, etc.) our <code>teardown</code> could get pretty complicated.</p>
+
+<p>How about this for isolation?</p>
+
+<pre data-type="programlisting">
+function setup(){
+&nbsp; return Object.create(getBody);
+}
+test('our async routine', function (assert) {
+&nbsp; const newBody = setup();
+&nbsp; newBody.allDone = testDouble.function();
+&nbsp; testDouble.when(newBody.allDone()).thenDo(function(){
+&nbsp;&nbsp;&nbsp; assert.notEqual(newBody.bodyArray.length, 0)
+&nbsp;&nbsp;&nbsp; assert.end()
+&nbsp; });
+&nbsp; http.get('http://refactoringjs.com', newBody.getResult.bind(newBody));
+});
+</pre>
+
+<p>Instead of having to reset our object, we can just use a new one with our test runs. Our <code>setup</code> function might not be specific enough for every situation, but it's perfect for this.</p>
+
+<div data-type="note" id="did-we-test-enough-xMcEu6tJsQ"><h6>Note</h6>
+<h1>Did we test enough?</h1>
+
+<p>Depending on our confidence, we can pretty much always add more tests. In this case, we might have opted to return the html string from <code>printBody</code> and tested that, (probably with a regex rather than a full match). We could made a double for this call:</p>
+
+<pre data-type="programlisting">
+result.on('data', this.saveBody.bind(this));</pre>
+
+<p>And made it always produce a simple html fragment.</p>
+
+<p>Additionally, we could test the fact that a function was called at all. Or that it <em>was called</em> or that it <em>was called and did not produce an error</em>.</p>
+
+<p>In a lot of asynchronous code, the return values are not as interesting (or confidence-producing) as knowing what functions were called and what other side-effects took place.</p>
+</div>
+
+<p>In this section, we created objects and explored some lightweight testing options for asynchronous code. You might lean towards heavier tools like mocha (as we used earlier) for testing and sinon (which we haven't looked at) for doubles. Or you might try out simpler tools like tape and testdouble. You might even want to just scrape by with <code>setTimeout</code> and <code>assert</code> or <code>wish</code> statements from time to time.</p>
+
+<p>As we discussed in Chapter 3, you have many options for tooling and testing. If something feels overly complex or doesn't do what you need it to, you can always tool down or tool up as needed. Flexibility and clarity are more important than hitting a screw with a hammer until it drives into the wall.</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect1" id="callbacks-and-testing-eQupha">
+<h1>Callbacks and Testing</h1>
+
+<p>From the last section, we have a new approach to fixing "the pyramid of doom," but it doesn't really get us out of "callback hell." In fact, by naming and extracting functions, we may actually reduce the clarity of our code in some cases. Rather than having nested callbacks, they could be spread across the file or multiple files.&nbsp;</p>
+
+<p>Creating an object helped with keeping callbacks somewhat organized, but isn't our only option. Part of what led us to that solution was the utility of having a container to store our side-effect array. We had to do some aggregation based on the streaming/event-emitting nature of node's http library and our desire to print the entire html at once. If we were adding something to a page or saving a file, we might consider allowing the file or DOM to <em>be</em> the aggregate itself, and just pass the results of the stream to it instead of getting them into an intermediate form (the array).</p>
+
+<p>We've seen that passing a (callback) function into another function is useful for asynchronous programming, but it completely changes how we've been working in the earlier parts of this book. Instead of returning something valuable and acting on it, we're letting the inner function call the shots (and it's inner function (and it's inner function)). This is a property of "continuation passing style" (CPS for short) called "inversion of control" (IoC for short), and while useful, it has some drawbacks:</p>
+
+<ul>
+	<li>It's confusing. You have to think backwards until you get used to it.</li>
+	<li>It makes function signatures complex. Instead of having function parameters act as "inputs," they now may be responsible for outputs as well.</li>
+	<li>"Callback hell" and the "pyramid of doom" are both likely without organizing code into objects or other high-level containers.</li>
+	<li>Error handling is more complicated.</li>
+</ul>
+
+<p>Additionally, asynchronous code in general is hard:</p>
+
+<ul>
+	<li>It makes testing more difficult (although part of this is just the nature of asynchronous programming).</li>
+	<li>It's hard to mix with synchronous code.</li>
+	<li>Return values are likely no longer important throughout the sequence of callbacks. This makes us rely on testing of arguments of callbacks to determine intermediate values.</li>
+</ul>
+
+<section data-type="sect2" id="basic-cps-and-ioc-43uRhDhM">
+<h2>Basic CPS and IoC</h2>
+
+<p>Let's look at an example of the most basic usage of callbacks in a function, simply to see this inversion of control in action. It doesn't even have to be asynchronous. Here's an example of a non-callback (aka "direct style") version of our function:</p>
+
+<pre data-type="programlisting">
+function addOne(addend){
+  console.log(addend + 1);
+};
+addOne(2);
+</pre>
+
+<p>And when we use callbacks to do the same thing:</p>
+
+<pre data-type="programlisting">
+function two(callback){
+&nbsp; callback(2);
+};
+two((addend) =&gt; console.log(addend + 1));
+</pre>
+
+<p>The weight of the algorithm is now in the callback, rather than the <code>two</code> function, which merely gives up control and passes a <code>2</code> to the callback. As we have done before, we can name and extract the anonymous function, giving us this:</p>
+
+<pre data-type="programlisting">
+function two(callback){
+&nbsp; callback(2);
+}
+function addOne(addend){
+&nbsp; console.log(addend + 1);
+}
+two(addOne);
+</pre>
+
+<p>The value of the calling function (<code>two</code>) is that it supplies a variable to the callback. In this case, that is all it does. If the <code>two</code> function needed its value to come from some longer running task, we'd want a callback (CPS) version. However, because <code>two</code> can immediately return, the direct style would be fine, if not, preferable.</p>
+
+<p>Let's add a <code>three</code> function that <em>does</em> need to work asynchronously:</p>
+
+<pre data-type="programlisting">
+function three(callback){
+&nbsp; setTimeout(function(){
+&nbsp;&nbsp;&nbsp; callback(3);
+&nbsp;&nbsp;&nbsp; },
+&nbsp; 500);
+};
+three(addOne);
+</pre>
+
+<p>If we tried doing the same synchronously:</p>
+
+<pre data-type="programlisting">
+function three(){
+&nbsp; setTimeout(function(){
+&nbsp;&nbsp;&nbsp; return 3
+&nbsp;&nbsp;&nbsp; },
+&nbsp;&nbsp;&nbsp; 500);
+}
+function addOne(addend){
+&nbsp; console.log(addend + 1);
+};
+addOne(three());
+</pre>
+
+<p>We end up printing <code>NaN</code> (which stands for "Not a Number") because <code>addOne</code> finishes executing before <code>three</code> gets a chance to return. In other words, we're trying to add <code>1</code> to <code>undefined</code> (the <code>addend</code> in <code>addOne</code>) resulting in <code>NaN</code>. So we'll need to go back to our previous version:</p>
+
+<pre data-type="programlisting">
+function addOne(addend){
+&nbsp; console.log(addend + 1);
+};
+function three(callback){
+&nbsp; setTimeout(function(){
+&nbsp;&nbsp;&nbsp; callback(3);
+&nbsp;&nbsp;&nbsp; },
+&nbsp; 500);
+};
+three(addOne);</pre>
+
+<p>Note that we could also have written our <code>addOne</code> function to take a callback, like this:</p>
+
+<pre data-type="programlisting">
+function addOne(addend, callback){
+&nbsp; callback(addend + 1);
+};
+function three(callback){
+&nbsp; setTimeout(function(){
+&nbsp;&nbsp;&nbsp; callback(3, console.log);
+&nbsp;&nbsp;&nbsp; },
+&nbsp;&nbsp;&nbsp; 500);
+};
+three(addOne);
+</pre>
+
+<p>Let's stick with this form for the tests.</p>
+</section>
+
+<section data-type="sect2" id="callback-style-testing-2JubCkhA">
+<h2>Callback Style Testing</h2>
+
+<p>The example from the last section might seem redundant with our earlier use of the <code>http.get</code> function, but there are four reasons we introduced it:</p>
+
+<ul>
+	<li>The motivation in the first part of this chapter was "the need to work with an asynchronous <em>library</em>." In this example, the motivation is "we need to work with an asynchronous <em>function</em> (just one)."</li>
+	<li>The earlier example is more complex because the callback of <code>get</code> leads to other callbacks in multiple <code>result.on</code> functions.</li>
+	<li>Our earlier example did not use CPS the whole way through. We relied on a non-local object to do some of the dirty work.</li>
+	<li>A <em>simple</em> example, where we write both the interface and the implementation code is needed because we'll increase the complexity when we introduce promises.</li>
+</ul>
+
+<p>Before we get to promises, we need tests for this code. Earlier, we cheated a bit by relying on a global variable for the value we were testing. We could do the same here, or rely on some kind of test double for <code>console.log</code> to check if it is called with the right argument (viable approach for an end-to-end test), but that's not where we're headed. This time, we'll try doing things a bit more async-like by only relying on the resulting parameters from our callbacks. Since <code>addOne</code> is simpler, let's start there.</p>
+
+<pre data-type="programlisting">
+const test = require('tape');
+
+test('our addOne function', (assert) =&gt; {
+&nbsp; addOne(3, (result) =&gt; {
+&nbsp;&nbsp;&nbsp; assert.equal(result, 4);
+  &nbsp; assert.end();
+&nbsp; });
+});
+</pre>
+
+<p>For the sake of testing, we're basically treating <code>result</code> like we would a return value. Instead of testing the return value, we're testing the parameter that is passed to the callback. As for reading this, we could say this:</p>
+
+<ul>
+	<li><code>addOne</code> takes two arguments: a number, and a callback</li>
+	<li>We're passing in a callback as the second (actual) <em>argument</em>. It is an anonymous function.</li>
+	<li>That anonymous function has a (formal) <em>parameter </em>we call result. We are <em>declaring</em> the function in the test.</li>
+	<li>That anonymous function is <em>called</em> inside of <code>addOne</code>, with the argument (<code>result</code>) being the addition of 1 and whatever was passed as the first argument to <code>addOne</code>.</li>
+	<li>We test that result against the numerical literal 4.</li>
+	<li>We end the test.</li>
+</ul>
+
+<p>Look at how different the <code>addOne</code> function and its test would be if we were just returning the result:</p>
+
+<pre data-type="programlisting">
+function addOneSync(addend){
+&nbsp; return addend + 1;
+}
+...
+test('our addOneSync function', (assert) =&gt; {
+&nbsp; assert.equal(addOneSync(3), 4);
+&nbsp; assert.end();
+});
+</pre>
+
+<p>Here we:</p>
+
+<ul>
+	<li>Pass 3 to the <code>addOne</code> function and get the return value.</li>
+	<li>Test that return value against the numerical literal 4.</li>
+	<li>End the test.</li>
+</ul>
+
+<p>One of those is way simpler, but we're living in an async world a lot of the time. Also, as we saw earlier, our <code>three</code> function doesn't have the luxury of having a usable synchronous analog. Here is our test:</p>
+
+<pre data-type="programlisting">
+test('our three function', (assert) =&gt; {
+&nbsp; three((result, callback) =&gt; {
+&nbsp;&nbsp;&nbsp; assert.equal(result, 3);
+&nbsp;&nbsp;&nbsp; assert.equal(callback, console.log);
+&nbsp; });
+&nbsp; assert.end();
+});
+</pre>
+
+<p>The <code>three</code> function only takes one argument. That is a function, which we've left anonymous. That anonymous function takes two parameters, which are supplied as arguments when the anonymous function is called inside of <code>three</code>. One is the <code>result</code> and the other is the <code>callback</code>. Our tests confirm that result is <code>3</code> and callback is <code>console.log</code>.</p>
+
+<p>If we want an end-to-end test, our best bet is using the testdouble library to see if <code>console.log</code> is called with 4.</p>
+
+<pre data-type="programlisting">
+test('our end-to-end test', (assert) =&gt; {
+&nbsp; testdouble.replace(console, 'log')
+&nbsp; three((result, callback) =&gt; {
+&nbsp;&nbsp;&nbsp; addOne(result, callback)
+&nbsp;&nbsp;&nbsp; testdouble.verify(console.log(4));
+    testdouble.reset();
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; });
+});
+</pre>
+
+<p>There are a couple of things worth noting here. First, the <code>testdouble.replace</code> function replaces the <code>console.log</code> function with a double that we can check later when we call <code>verify</code>. Following that, <code>testdouble.reset</code> restores <code>console.log</code> to its former self. Recall earlier when we were talking about creating a <code>teardown</code> function. We could use <code>testdouble.reset</code> to put our doubles back, meaning that after we do that, we could use <code>console.log</code> as normal.</p>
+
+<p>So now that we have tests in place, let's get to promisifying.</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="promises-azuLC1">
+<h1>Promises</h1>
+
+<p>If you like being able to write asynchronous JavaScript, but <em>don't</em> like the mess that comes along with inversion of control, promises are for you. Let's recap what we've seen so far. In direct style, you return values from functions and use those return values in other functions. In CPS (continuation passing style), you invert control by the calling code supplying (and often defining inline) a callback to be executed by the function that is called. Return values become little better than meaningless, and instead the arguments passed from the callback (one is conventionally called "result") become the focus of tests and subsequent callbacks.</p>
+
+<p>Although using callbacks open up the possibility of asynchronous code (without using some kind of polling), we introduce some complexity, both in the way we structure our functions and in the way we call them.</p>
+
+<p>Promises shift this complexity to the function definition side of things, leaving the function calling code with a relatively simple API. For most situations, promises are a better choice than CPS. And where they aren't the right choice, CPS probably isn't either. In those cases, you might be looking for stream-handling, observables, or some other high-level pattern.</p>
+
+<section data-type="sect2" id="the-basic-promise-interface-Ynu5IMC0">
+<h2>The Basic Promise Interface</h2>
+
+<p>So how do we use promises? We'll cover the implementation of promises soon, but for now, let's see what the promise interface looks like</p>
+
+<pre data-type="programlisting">
+// Promises
+four()
+.then(addOne)
+.then(console.log);
+</pre>
+
+<p>This is pretty straightforward. We have a function that returns a 4 (wrapped in a promise), acted on by <code>addOne</code> (which itself returns a promise) and that is acted on by <code>console.log</code>.</p>
+
+<p>If we're looking to compose functions, promises are much easier to work with. Callbacks have us stuck either hardcoding function names (and/or function literals for callbacks) in the function declarations, passing them in as extra parameters in the function, or some other non-trivial and somewhat confusing alternatives.</p>
+
+<p>With promises, we are just chaining values together. We have a value (wrapped in a promise), and <code>then</code> <em>unwraps</em> it by waiting (when necessary), and then passes that value as a parameter to the promise or function. To illustrate a bit more of the interface, we could also write form 2:</p>
+
+<pre data-type="programlisting">
+// form 1
+four()
+.then(addOne)
+.then(console.log);
+
+// form 2
+four()
+.then((valueFromFour) =&gt; addOne(valueFromFour))
+.then((valueFromAddOne) =&gt; console.log(valueFromAddOne));
+</pre>
+
+<p>In these forms, we have a function literal or reference. Both the function definitions and the function calls of <code>addOne</code> and <code>console.log</code> happen elsewhere. Form 1 is preferable when possible (it is also known as "point-free," a style we'll discuss more in the next chapter).</p>
+
+<p>Moving from form 2 to form 1 has a similar feel to naming and extracting an anonymous function. In both cases, the function <em>calls</em> happen elsewhere, and may even be implicit or outside of your code base (ie. you won't be able to "grep" for them). In the case of moving from form 2 to form 1 however, the function <em>definitions</em> (along with their names) already exist, so we only need to drop the anonymous wrapping function.</p>
+
+<div data-type="note" id="the-flexibility-of-promises-MDcacbIZCn"><h6>Note</h6>
+<h1>The flexibility of promises</h1>
+
+<p>If you're still not sure about the utility of promises over callbacks, take a look at this:</p>
+
+<pre data-type="programlisting">
+four()
+.then(addOne)
+.then(addOne)
+.then(addOne)
+.then(addOne)
+.then(addOne)
+.then(console.log);
+</pre>
+
+<p>We can chain as many <code>addOne</code>s as we want. It's basically a fluent interface if you ignore the <code>then</code> calls, and it's async friendly. You can do this with CPS but you're headed for the pyramid of doom (and hard to test intermediate results).</p>
+</div>
+</section>
+
+<section data-type="sect2" id="creating-and-using-promises-Lbu8s4CZ">
+<h2>Creating and Using Promises</h2>
+
+<p>Now that we have a good idea of why promises are often a good choice over callbacks, let's take a look at how we actually implement them:</p>
+
+<pre data-type="programlisting">
+four()
+.then(addOne)
+.then(console.log);
+
+function addOne(addend){
+&nbsp; return Promise.resolve(addend + 1);
+}
+
+function four(){
+&nbsp; return new Promise((resolve, _reject) =&gt; {
+&nbsp;&nbsp;&nbsp; setTimeout(() =&gt; resolve(4), 500);
+&nbsp; })
+}
+</pre>
+
+<p>The first three lines should be very familiar by now. So how do the new functions work? It might seem complex inside the function bodies, but notice that we're no longer passing callbacks, which can get very confusing. Also, we get our <code>return</code> statements back!</p>
+
+<p>Unfortunately, what we are returning are promises, which seem hard to understand. But they aren't. It's just like making toast:</p>
+
+<ul>
+	<li>You start with a toaster.</li>
+	<li>You put your bread in it along with some input on how to toast it.</li>
+	<li>The toaster determines when the bread is toasty enough and pops up.</li>
+	<li>After it's ready, you get your toast and consume the toast how you see fit.</li>
+</ul>
+
+<p>The same four steps are true of promises:</p>
+
+<ul>
+	<li>You start with a promise (Usually with <code>new Promise</code>, but we also show that you can create one with <code>Promise.resolve</code>)</li>
+	<li>You put a value <em>or</em> the process to create a value (which may be asynchronous) into the promise.</li>
+	<li>After a timer (as we show in <code>four</code>) or the result of some asynchronous function, the value is set by <code>resolve(someValue)</code>.</li>
+	<li>This value is returned wrapped in a promise. You pull it out of the toaster, I mean "promise," with the <code>then</code> function, and consume the value as you see fit.</li>
+</ul>
+
+<aside data-type="sidebar" id="do-you-hate-metaphors-dqSrCkswCb">
+<h5>Do you hate metaphors?</h5>
+
+<p>No? Good. We'll be discussing "burritos" at the end of Chapter 11. They're kind of like making toast.</p>
+
+<p>But aren't promises a high-level functional structure like a "functor" or "monad" or something? Maybe, but that's a huge topic, and we can't get into all of it in this book. Chapter 11 gives a good introduction to practical functional coding, but we'll leave the theory out of it and focus on using good coding interfaces.</p>
+</aside>
+
+<p>Back to our example, our <code>addOne</code> function returns a promise created with <code>Promise.resolve(addend + 1)</code>. This is fine for cases where we only need a value, but using the <code>new Promise</code> constructor function and supplying a callback (the "executor") that calls <code>resolve</code> or <code>reject</code> (the two functions named by the signature of the callback of the constructor, the "executor") provides more flexibility.</p>
+
+<aside data-type="sidebar" id="some-considerations-about-then-9kSafxsmCK">
+<h5>Some considerations about <code>then</code></h5>
+
+<p>There is something to note about our <code>addOne</code> function:</p>
+
+<pre data-type="programlisting">
+function addOne(addend){
+&nbsp; return Promise.resolve(addend + 1);
+}</pre>
+
+<p>It would work just as well if the second line was this:</p>
+
+<pre data-type="programlisting">
+&nbsp; return addend + 1;</pre>
+
+<p>Why? Because <code>then</code> will accept a promise <em>or</em> a function (or two actually: the first for fulfillment and the second for rejection). Try this:</p>
+
+<pre data-type="programlisting">
+four()
+.then(() =&gt; 6)
+.then(console.log);
+</pre>
+
+<p>In this case, 6 will be printed. The first <code>then</code>'s callback throws away the 4 and just passes 6 along.</p>
+
+<p>However, note that <code>four</code> cannot be a simple function returning a simple value, even without considering the <code>setTimeout</code> aspect of it. The <em>first</em> function in a promise chain must be a "thenable," aka return an object that supports the <code>.then(fulfillment, rejection)</code> interface. That said, you could start off just by having a resolved promise:</p>
+
+<pre data-type="programlisting">
+Promise.resolve()
+.then(() =&gt; 4)
+.then(() =&gt; 6)
+.then(console.log);
+</pre>
+</aside>
+
+<p>A <code>resolve</code> will make the value available inside of the <code>then</code> function. The <code>reject</code> function will create a <em>rejected</em> promise object. There is a <code>catch</code> function which will catch some errors (and miss others, so be careful). There are also <code>Promise.all</code> and <code>Promise.race</code> to, respectively, return when all promises complete and return the first promise that completes.</p>
+
+<p>In some ways, it is a fairly small API, but the variations around error handling and setting promises up can make for a tricky experience. But the interface it provides makes the up front work worth it.</p>
+</section>
+
+<section data-type="sect2" id="testing-promises-43uKtoCM">
+<h2>Testing Promises</h2>
+
+<p>To finish things up neatly, let's see how the tests adapt to this new interface:</p>
+
+<pre data-type="programlisting">
+function addOne(addend){
+&nbsp; return Promise.resolve(addend + 1);
+}
+
+function four(){
+&nbsp; return new Promise((resolve, _reject) =&gt; {
+&nbsp;&nbsp;&nbsp; setTimeout(() =&gt; resolve(4), 500);
+&nbsp; })
+}
+
+const test = require('tape');
+const testdouble = require('testdouble');
+
+test('our addOne function', (assert) =&gt; {
+&nbsp; addOne(3).then((result) =&gt; {
+&nbsp;&nbsp;&nbsp; assert.equal(result, 4);
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; });
+});
+
+test('our four function', (assert) =&gt; {
+&nbsp; four().then((result) =&gt; {
+&nbsp;&nbsp;&nbsp; assert.equal(result, 4);
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; });
+});
+
+test('our end-to-end test', (assert) =&gt; {
+&nbsp; testdouble.replace(console, 'log')
+&nbsp; four()
+&nbsp; .then(addOne)
+&nbsp; .then(console.log)
+&nbsp; .then(() =&gt; {
+&nbsp;&nbsp;&nbsp; testdouble.verify(console.log(5));
+&nbsp;&nbsp;&nbsp; assert.pass();
+&nbsp;&nbsp;&nbsp; testdouble.reset();
+&nbsp;&nbsp;&nbsp; assert.end();
+&nbsp; }).catch((e) =&gt; {
+&nbsp;&nbsp;&nbsp; testdouble.reset();
+&nbsp;&nbsp;&nbsp; console.log(e);
+&nbsp; })
+});
+</pre>
+
+<p>The first two tests, which are low-level, are relatively unchanged. The end-to-end test has changed quite a bit. After replacing console.log so that we can monitor it, we kick off the promise chain with our promise-returning <code>four</code> function. We chain our <code>addOne</code> and <code>console.log</code> callbacks with <code>then</code> functions. And then we have another then, with an anonymous function as the only argument. Inside of that anonymous function, we <code>verify</code> that <code>console.log</code> was called with 5. Following that, we call <code>assert.pass</code> so that our test output will confirm 3 instead of 2 passing tests. We need that because <code>verify</code> isn't part of <code>tape</code> and doesn't produce a passing assertion. Then we do the teardown with <code>testdouble.reset</code> and <code>assert.end</code>.</p>
+
+<p>You might be wondering what we're doing with the <code>catch</code>. Well, unfortunately, after we replace <code>console.log</code>, our errors will no longer print anything! <code>catch</code> allows us to put <code>console.log</code> back with <code>testdouble.replace</code> <em>before</em> printing the error with <code>console.log(e)</code>.</p>
+
+<aside data-type="sidebar" id="is-changing-callback-style-code-into-promises-refactoring-zZSwsntxCb">
+<h5>Is changing callback-style code into promises "refactoring?"</h5>
+
+<p>Probably not, unless you aren't concerned with unit testing at all and consider your "interface" to be some very high level interactions with the code. The value in promises is that they change interfaces, and those are probably where you would want your testing to be.</p>
+
+<p>So why spend so much time on promises in "Refactoring JavaScript?"&nbsp;&nbsp;</p>
+
+<p>There are three reasons. First, you'll probably hear someone, at some point talk about "refactoring to use promises." You'll know this actually means supporting new interfaces, and writing new code with new tests. See the diagram on what tests to write in Chapter 5 (figure 5-1). The second reason is that knowing where you are in the testing cycle (testing before new code, increasing coverage, or refactoring) is the most important thing to have a handle on when developing confidence in a codebase. Third, there are ton of <em>cool things</em> in JavaScript (canvas, webvr, webgl, etc.)&nbsp; that make somewhat niche applications possible, but asynchronous programming with promises is increasingly important for JavaScript developers of all kinds.</p>
+</aside>
+</section>
+</section>
+
+<section data-type="sect1" id="wrapping-up-5VuecJ">
+<h1>Wrapping up</h1>
+
+<p>Async is a huge and active area of development in JavaScript, and we only scratched the surface. Other things worth exploring are: web workers, streams, observables, generators, async/await, and non-native async/promise utilities.</p>
+
+<p>For the most part using any of these features will involve dramatically changing code and not "refactoring." But having a base knowledge of the interfaces involved&nbsp; in your code, as well as how to test them, is crucial before any refactoring can take place.</p>
+
+<p>Despite "refactoring to promises" not really fitting our concept of <em>refactoring</em>, the interface is one that we should prefer, because it generates useful return values rather than relying on calling other functions (side-effects). By the same token, <code>async</code> and <code>await</code> are interesting because they allow us to write synchronous-looking code just by adding a few keywords. However, as of this writing, their spec and implementations are not yet realized.&nbsp;</p>
+
+<p>In the "Gang of Four" book, "Design Patterns: Elements of Reusable Object-Oriented Software," the advice to "code to an interface, not an implementation" must be predicated on<em> </em>the <em>capacity to choose</em> what interface you want. Following that, you can develop confidence through writing tests and refactoring. Here, we've explored a few more options.</p>
+</section>
+</section>
+
+  </body>
+</html>

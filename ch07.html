@@ -1,0 +1,3568 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <section data-type="chapter" id="refactoring-functions-and-objects-54Psl">
+<h1>Refactoring Functions and Objects</h1>
+
+<p>In the previous chapter, we started a project of creating an Naive Bayes Classifier (or NBC, for short). We've made improvements, but nothing so far really got to the heart of refactoring our functions and objects.</p>
+
+<p>That's what this chapter is all about.</p>
+
+<aside data-type="sidebar" id="is-object-oriented-programming-still-relevant-in-javascript-KDCKhN">
+<h5>Is Object Oriented Programming Still Relevant in JavaScript?</h5>
+
+<p>In this, and the next two chapters, we're working with OOP. Based on some JavaScript styles, OOP is de-emphasized in favor of Functional Programming. Beyond the practical reason of understanding OOP in JavaScript to support legacy projects, JavaScript's OOP capabilities are still being expanded through the TC39 committee that decides on features for JavaScript.</p>
+
+<p>It's reasonable to have a personal preference for your own coding, but if your goal is to understand modern JavaScript, as of this writing, FP and OOP are still being actively developed. With no clear "winner" at this point, it makes sense to learn about both.</p>
+</aside>
+
+<p>&nbsp;</p>
+
+<p>&nbsp;</p>
+
+<section data-type="sect1" id="the-code-improved-Kqs9TN">
+<h1>The Code (Improved)</h1>
+
+<p>In case you skimmed over the last chapter or missed a step somewhere, here is the version we ended up with:</p>
+
+<pre data-type="programlisting">
+function fileName(){
+&nbsp; var theError = new Error("here I am");
+&nbsp; return /\/(\w+\.js)\:/.exec(theError.stack)[1];
+}
+console.log(`Welcome to ${fileName()}!`);
+var easy = 'easy';
+var medium = 'medium';
+var hard = 'hard';
+imagine = ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'];
+somewhereOverTheRainbow = ['c', 'em', 'f', 'g', 'am'];
+tooManyCooks = ['c', 'g', 'f'];
+iWillFollowYouIntoTheDark = ['f', 'dm', 'bb', 'c', 'a', 'bbm'];
+babyOneMoreTime = ['cm', 'g', 'bb', 'eb', 'fm', 'ab'];
+creep = ['g', 'gsus4', 'b', 'bsus4', 'c', 'cmsus4', 'cm6'];
+paperBag = ['bm7', 'e', 'c', 'g',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b7', 'f', 'em', 'a',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'cmaj7', 'em7', 'a7', 'f7',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b'];
+toxic = ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7', 'g7'];
+bulletproof = ['d#m', 'g#', 'b', 'f#', 'g#m', 'c#'];
+
+var songs = [];
+var labels = [];
+var allChords = [];
+var labelCounts = [];
+var labelProbabilities = [];
+var chordCountsInLabels = {};
+var probabilityOfChordsInLabels = {};
+
+function train(chords, label){
+&nbsp; songs.push([label, chords]);
+&nbsp; labels.push(label);
+&nbsp; chords.forEach(chord =&gt; {
+&nbsp;&nbsp;&nbsp; if(!allChords.includes(chord)){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allChords.push(chord);
+&nbsp;&nbsp;&nbsp; }
+&nbsp; });
+&nbsp; if(Object.keys(labelCounts).includes(label)){
+&nbsp;&nbsp;&nbsp; labelCounts[label] = labelCounts[label] + 1;
+&nbsp; } else {
+&nbsp;&nbsp;&nbsp; labelCounts[label] = 1;
+&nbsp; }
+};
+
+function setLabelProbabilities(){
+&nbsp; Object.keys(labelCounts).forEach(function(label){
+&nbsp;&nbsp;&nbsp; labelProbabilities[label] = labelCounts[label] / songs.length;
+&nbsp; })
+};
+
+function setChordCountsInLabels(){
+&nbsp; songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; if(chordCountsInLabels[song[0]] === undefined){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song[0]] = {}
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; song[1].forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(chordCountsInLabels[song[0]][chord] &gt; 0){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song[0]][chord] += 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song[0]][chord] = 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; });
+&nbsp; });
+}
+
+function setProbabilityOfChordsInLabels(){
+&nbsp; probabilityOfChordsInLabels = chordCountsInLabels;
+&nbsp; Object.keys(probabilityOfChordsInLabels).forEach(function(difficulty){
+&nbsp;&nbsp;&nbsp; Object.keys(probabilityOfChordsInLabels[difficulty]).forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; probabilityOfChordsInLabels[difficulty][chord] /= songs.length;
+&nbsp;&nbsp;&nbsp; })
+&nbsp; })
+}
+
+train(imagine, easy);
+train(somewhereOverTheRainbow, easy);
+train(tooManyCooks, easy);
+train(iWillFollowYouIntoTheDark, medium);
+train(babyOneMoreTime, medium);
+train(creep, medium);
+train(paperBag, hard);
+train(toxic, hard);
+train(bulletproof, hard);
+
+setLabelProbabilities();
+setChordCountsInLabels();
+setProbabilityOfChordsInLabels();
+
+function classify(chords){
+&nbsp; var smoothing = 1.01;
+&nbsp; console.log(labelProbabilities);
+&nbsp; var classified = {}
+&nbsp; Object.keys(labelProbabilities).forEach(function(difficulty){
+&nbsp;&nbsp;&nbsp; var first = labelProbabilities[difficulty] + smoothing;
+&nbsp;&nbsp;&nbsp; chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; var probabilityOfChordInLabel = probabilityOfChordsInLabels[difficulty][chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; first = first * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; })
+&nbsp;&nbsp;&nbsp; classified[difficulty] = first
+&nbsp; });
+&nbsp; console.log(classified);
+};
+
+classify(['d', 'g', 'e', 'dm']);
+classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+</pre>
+
+<p>As was the case before, save this to a file called nb.js, and you can run it with this command:</p>
+
+<pre data-type="programlisting">
+<strong>node nb.js</strong></pre>
+
+<p>We won't have tests in place for another couple of sections. We're still limping along by checking that our output hasn't changed. You should get the following:</p>
+
+<pre data-type="programlisting">
+Welcome to nb.js!
+[ easy: 0.3333333333333333,
+&nbsp; medium: 0.3333333333333333,
+&nbsp; hard: 0.3333333333333333 ]
+{ easy: 2.023094827160494,
+&nbsp; medium: 1.855758613168724,
+&nbsp; hard: 1.855758613168724 }
+[ easy: 0.3333333333333333,
+&nbsp; medium: 0.3333333333333333,
+&nbsp; hard: 0.3333333333333333 ]
+{ easy: 1.3433333333333333,
+&nbsp; medium: 1.5060259259259259,
+&nbsp; hard: 1.6884223991769547 }</pre>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+
+<p>&nbsp;</p>
+
+<section data-type="sect1" id="array-and-object-alternatives-OXsEu8">
+<h1>Array And Object Alternatives</h1>
+
+<p>Containers (especially arrays and objects) and iterating through them are fundamental concepts in programming JavaScript. In this section, we'll explore more nuanced options JavaScript has available. Here are the topics that we'll cover:</p>
+
+<ul>
+	<li>Array Alternative: Sets</li>
+	<li>Array Alternative: Objects</li>
+	<li>Object Alternative: Maps</li>
+	<li>Array Alternative: Bit Fields</li>
+</ul>
+
+<section data-type="sect2" id="array-alternative-sets-xbszhMum">
+<h2>Array Alternative: Sets</h2>
+
+<p>First up, "Sets". A <code>Set</code> is like an array, but can only hold <em>one</em> of a certain value. Although they are iterable, like arrays, their interface is very different. Because they can only hold one of something, we can just try adding to them without checking conditionally.</p>
+
+<p>So with a <code>Set</code> instead of an array we can turn this code:</p>
+
+<pre data-type="programlisting">
+var allChords = []; //this is outside the train function
+
+//this is inside the train function
+chords.forEach(chord =&gt; {
+&nbsp; if(!allChords.includes(chord)){
+&nbsp;&nbsp;&nbsp; allChords.push(chord);
+&nbsp; }
+});</pre>
+
+<p>into this code:</p>
+
+<pre data-type="programlisting">
+var allChords = new Set(); //this is outside the train function
+
+//this is inside the train function
+chords.forEach(chord =&gt; allChords.add(chord));
+</pre>
+
+<p>It saves 4 lines and a conditional check. Win win. Make that change now.</p>
+
+<div data-type="warning" id="sets-and-maps-dont-have-all-the-handy-array-functions-Xlupfnhaul"><h6>Warning</h6>
+<h1>Sets and Maps don't have all the handy Array functions.</h1>
+
+<p>For instance, as of this writing, neither Set nor Map, have a <code>map</code> function. This would be nice, but there are some theoretical reasons that are out of scope here (having to do with the laws of functors) for why you're stuck without native implementations. So, as far as convenient options go, you're stuck with either: converting to an array and back, or using <code>forEach</code>.</p>
+</div>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect2" id="array-alternative-objects-Y0sAUvuB">
+<h2>Array Alternative: Objects</h2>
+
+<p>Another thing you might want instead of an Array is just an object. This is especially the case if you have data where you:</p>
+
+<ul>
+	<li>don't care about the order</li>
+	<li>want to mix types in the same structure</li>
+	<li>want meaningful labels rather than numerical indices</li>
+</ul>
+
+<p>Our code actually has a case like this already. Even though we initialized <code>labelCounts</code> and <code>labelProbabilities</code> as arrays, we've been using them as objects all along. To be more specific, we should change these lines:</p>
+
+<pre data-type="programlisting">
+var labelCounts = [];
+var labelProbabilities = [];
+</pre>
+
+<p>to these:</p>
+
+<pre data-type="programlisting">
+var labelCounts = {};
+var labelProbabilities = {};
+</pre>
+
+<p>Save/Run/Check/Commit. And we're still fine. The change to <code>labelProbabilities</code> does change half of the output somewhat (<code>{}</code> instead of <code>[]</code>), but this is actually more correct.</p>
+
+<p>How did we get away with using an array instead of an object? Unfortunately, JavaScript allows you to declare an array and assign elements to string-based keys, like an object. One could argue that we're now changing behavior and beyond the scope of refactoring by making these changes. On the other hand, our output is only for visual inspection at this point. It still looks correct, and if anything, is improved a bit.</p>
+
+<p>We have two arrays left, <code>songs</code> and <code>labels</code>. Looking at how they're used, they both have elements pushed to them, and <code>songs</code> is iterated through and has its length referenced. They are both justifiably arrays, but two things are of interest here. First, <code>labels</code> is only "used" in the sense that elements are pushed onto it, but it isn't actually referenced otherwise. It's dead code, so these lines can be removed:</p>
+
+<pre data-type="programlisting">
+var labels = []; // near the top
+labels.push(label); //inside the train function
+</pre>
+
+<p>(Save/Run/Check/Commit)</p>
+
+<p>The second thing to notice about <code>songs</code> is that "arrays" are pushed onto it, but these "arrays" just have two elements, neither of which are the same type. One is a "label" (a difficulty classification like "easy"), and one is an array of chords. This sounds like a better fit for an object than an array. To be clear, <code>songs</code> remains an array, but the things pushed on it should be objects. This involves a few changes.</p>
+
+<p>Inside the <code>train</code> function, what we push will be different:</p>
+
+<pre data-type="programlisting">
+// get rid of this line
+songs.push([label, chords]);
+
+// and replace it with this
+songs.push({label: label, chords: chords});
+</pre>
+
+<p>Now we're using an object instead of an array. This will break a lot of things. Fortunately, since we haven't changed <code>songs</code> itself, the calls from it (<code>length</code> and <code>forEach</code>) will still work fine. Inside of the anonymous function for <code>forEach</code>&nbsp; (inside of <code>setChordCountsInLabels</code>) however, our references to <code>song</code> now have some problems.</p>
+
+<p>Specifically, every reference to either <code>song[0]</code> or <code>song[1]</code> must be changed, respectively, to <code>song.label</code> and <code>song.chords</code>. You could just search and replace this, but another view on how to change the file is as follows:</p>
+
+<pre data-type="programlisting">
+-&nbsp;&nbsp;&nbsp; if(chordCountsInLabels[song[0]] === undefined){
+-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song[0]] = {}
++&nbsp;&nbsp;&nbsp; if(chordCountsInLabels[song.label] === undefined){
++&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song.label] = {}
+&nbsp;&nbsp;&nbsp;&nbsp; }
+-&nbsp;&nbsp;&nbsp; song[1].forEach(function(chord){
+-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(chordCountsInLabels[song[0]][chord] &gt; 0){
+-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song[0]][chord] += 1;
++&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
++&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(chordCountsInLabels[song.label][chord] &gt; 0){
++&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song.label][chord] += 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } else {
+-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song[0]][chord] = 1;
++&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels[song.label][chord] = 1;</pre>
+
+<p>We haven't used this before, but this is how <strong><code>git diff</code></strong> represents changes. If you use git, you'll see this frequently. Every line with a <code>-</code> means a line to be deleted and replaced with the lines with the line prepended with the <code>+</code>. Lines with no plus or minus are just provided for context.</p>
+
+<p>At this point, you should be able to save, run the code, and verify the output has not changed.</p>
+</section>
+
+<section data-type="sect2" id="object-alternative-maps-lds9cBub">
+<h2>Object Alternative: Maps</h2>
+
+<p>Now it seems that all of our arrays are proper arrays, instead of sets or objects in disguise. But what about those objects? Do we really want objects?</p>
+
+<p>If you haven't heard of <code>Map</code> (the object, not the function), you might be wondering what the alternative to an object would be. But after reading the last sentence, you might be guessing that it's <code>Map</code>.</p>
+
+<p>Why would you use a <code>Map</code> over an <code>Object</code>? (we'll refer to both as "containers")</p>
+
+<ul>
+	<li>You want to easily know the size of the container</li>
+	<li>You don't want the hierarchical baggage that can come with objects</li>
+	<li>You want a container for elements that are similar to one another</li>
+	<li>You generally want to iterate through the container</li>
+</ul>
+
+<p>In most object oriented languages, there is a map-like container available. Sometimes it's called a "dictionary" or a "hash," responsible for "keys" and "values." And this is usually contrasted by a heavier weight class system (with classes, instances, inheritance, etc.) that is intended to store "state" (attributes) and "behavior" (functions/methods).</p>
+
+<p>In JavaScript, objects have traditionally filled both these roles, but the (yes, "pseudo") class system (along with modules) are taking over the larger architectural duties, whereas maps are intended to fulfil the lighter weight "keys and values" role.</p>
+
+<p>In practical terms, this means that if most of your interactions with objects consist of looping through them, and they tend to store values of the same type (or at least values that can be used in the same way, eg. addressed with similar functions), you probably want a <code>Map</code>.</p>
+
+<p>What does all that mean for us and our objects inside of our NBC?</p>
+
+<p>They should all be maps.</p>
+
+<div data-type="warning" id="counterpoint-maps-are-terrible-but-just-for-now-KXuXS1c3u4"><h6>Warning</h6>
+<h1>Counterpoint: Maps are Terrible... but just for now?</h1>
+
+<p>While our program's data strongly suggests we should use maps instead of objects, there are also reasons we might want to avoid them.</p>
+
+<ul>
+	<li>The <code>.get</code> and <code>.set</code> notation are not as convenient as the <code>object.property.property.etc</code> syntax for dealing with deeply nested structures.</li>
+	<li>The API overall (in comparison to objects) may be unfamiliar to you or other members of your team</li>
+	<li>JSON stands for "JavaScript Object Notation." When you get JSON data (from a remote API for instance), you might feel some reasonable amout of inertia for simply working with it as an object. Converting objects to maps might not be worth the trouble.</li>
+	<li>Internal (native) and external (library) support is not as convenient for maps as it is for other containers (eg. as of this writing Map has no <code>map</code> function).</li>
+</ul>
+
+<p>For those reasons (especially the first one), we will end up leaving some the internal objects as they are, but still use maps for the outer containers.</p>
+</div>
+
+<p>The easiest object to convert to a map is <code>classified</code> inside of the <code>classify</code> function because it has the fewest lines. Here is the diff:</p>
+
+<pre data-type="programlisting">
+-&nbsp; var classified = {}
++&nbsp; var classified = new Map();
+-&nbsp; classified[difficulty] = first
++&nbsp; classified.set(difficulty, first);</pre>
+
+<p>And when we save and run this, the output looks slightly different, but the numbers are all the same. Commit.</p>
+
+<p>Next up, let's see what it would take to convert <code>labelCounts</code> from an object to a map:</p>
+
+<pre data-type="programlisting">
+-var labelCounts = {};
++var labelCounts = new Map();
+
+
+-&nbsp; if(Object.keys(labelCounts).includes(label)){
+-&nbsp;&nbsp;&nbsp; labelCounts[label] = labelCounts[label] + 1;
++&nbsp; if(Array.from(labelCounts.keys()).includes(label)){
++&nbsp;&nbsp;&nbsp; labelCounts.set(label, labelCounts.get(label) + 1);
+
+-&nbsp;&nbsp;&nbsp; labelCounts[label] = 1;
++&nbsp;&nbsp;&nbsp; labelCounts.set(label, 1);
+
+-&nbsp; Object.keys(labelCounts).forEach(function(label){
+-&nbsp;&nbsp;&nbsp; labelProbabilities[label] = labelCounts[label] / songs.length;
++&nbsp; labelCounts.forEach(function(_count, label){
++&nbsp;&nbsp;&nbsp; labelProbabilities[label] = labelCounts.get(label) / songs.length;
+</pre>
+
+<p>Recall first our <strong><code>git diff</code></strong> notation where <code>+</code> is an added line and <code>-</code> is a deleted one.</p>
+
+<p>So the first change obviously just uses a <code>Map</code> constructor instead of assigning an empty object literal <code>{}</code>. The second change is the most convoluted. In this, the meaning of the entire first line is to see if the label has not already been included.</p>
+
+<p>In order get the array of labels with our old object, the <code>Object.keys</code> function is used, taking a parameter of the <code>labelCounts</code> object. To get the same array from our map, we have to first get an "iterator" with <code>labelCounts.keys()</code> . Unlike an array, this iterator object does not have an <code>includes</code> function, so we convert from an iterator to an array via the <code>Array.from</code> function.</p>
+
+<p>Another somewhat confusing part is in change 4, where we <code>forEach</code> our way through the map. The odd part is that our anonymous function is using two parameters instead of one: <code>_count</code> and <code>label</code></p>
+
+<p>The <code>label</code> is the "key" of our map, and the value is the <code>_count</code>. The underscore is there to signify that, although we must include something in the first spot of the parameter list in order to label and access the second one, the first is unused. Some would use just an "<code>_</code>", but there is no good reason not to name the variable something useful. Should someone later needing it need to look up the function definition to realize what the first parameter means or use <code>console.log</code> to find its value? Or should they just delete the underscore that prepends a perfectly useful variable name that is descriptive? I'd argue the latter.</p>
+
+<div data-type="note" id="why-did-they-do-that-pXumfvcAul"><h6>Note</h6>
+<h1>Why did they do that?</h1>
+
+<p>The <code>forEach</code> function of <code>Map</code> ordering the params is backwards to how people usually think of hashes/dictionaries: "key/value pairs"</p>
+
+<p>It might be nicer if it was <code>(key, value)</code>, rather than <code>(value, key)</code>, but I suppose the assumption is that people will more often be interested in strictly the value, meaning they would tend to call it with one parameter: <code>(value)</code>.</p>
+
+<p>In any case, stay safe out there.</p>
+</div>
+
+<p>The other changes just reflect differences in getting attributes: <code>.get(<em>thing</em>)</code> vs. <code>[<em>thing</em>]</code>. And setting attributes: <code>.set(<em>thing, newValue</em>)</code> vs. <code>[<em>thing</em>] = <em>newValue</em></code></p>
+
+<p>Through the same approach, you can convert <code>labelProbabilities</code> to a <code>Map</code> as well. Make the following changes:</p>
+
+<pre data-type="programlisting">
+- var labelProbabilities = {};
++ var labelProbabilities = new Map();
+
+- labelProbabilities[label] = labelCounts.get(label) / songs.length;
++ labelProbabilities.set(label, labelCounts.get(label) / songs.length);
+
+- Object.keys(labelProbabilities).forEach(function(difficulty){
+-&nbsp;&nbsp; var first = labelProbabilities[difficulty] + smoothing;
++ labelProbabilities.forEach(function(_probabilities, difficulty){
++&nbsp;&nbsp; var first = labelProbabilities.get(difficulty) + smoothing;
+</pre>
+
+<p>At this point, you should still have code that runs and gives you the numbers you expect.</p>
+
+<p>The other top level objects (<code>chordCountsInLabels</code> and <code>probabilityOfChordsInLabels</code>) are a bit trickier to convert into maps. This is mostly because their state is global and mutable. They are also a bit more resistant to change because the latter is initially assigned to the former.</p>
+
+<p>After applying the same approach as before, albeit more finicky this time, we will need the following changes:</p>
+
+<pre data-type="programlisting">
+-var chordCountsInLabels = {};
+-var probabilityOfChordsInLabels = {};
++var chordCountsInLabels = new Map();
++var probabilityOfChordsInLabels = new Map();
+
+-if(chordCountsInLabels[song.label] === undefined){
+-&nbsp; chordCountsInLabels[song.label] = {}
++if(chordCountsInLabels.get(song.label) === undefined){
++&nbsp; chordCountsInLabels.set(song.label, {})
+
+-if(chordCountsInLabels[song.label][chord] &gt; 0){
+-&nbsp; chordCountsInLabels[song.label][chord] += 1;
++if(chordCountsInLabels.get(song.label)[chord] &gt; 0){
++&nbsp; chordCountsInLabels.get(song.label)[chord] += 1;
+
+-chordCountsInLabels[song.label][chord] = 1;
++chordCountsInLabels.get(song.label)[chord] = 1;
+
+-Object.keys(probabilityOfChordsInLabels).forEach(function(difficulty){
+-&nbsp; Object.keys(probabilityOfChordsInLabels[difficulty]).forEach(function(chord){
+-&nbsp;&nbsp;&nbsp; probabilityOfChordsInLabels[difficulty][chord] /=&nbsp; songs.length;
++probabilityOfChordsInLabels.forEach(function(_chords, difficulty){
++&nbsp; Object.keys(probabilityOfChordsInLabels.get(difficulty)).forEach(function(chord){
++&nbsp;&nbsp;&nbsp; probabilityOfChordsInLabels.get(difficulty)[chord] /=&nbsp; songs.length;
+
+-var probabilityOfChordInLabel = probabilityOfChordsInLabels[difficulty][chord]
++var probabilityOfChordInLabel = probabilityOfChordsInLabels.get(difficulty)[chord]
+</pre>
+
+<p>Save/Run/Check/Commit.</p>
+
+<aside data-type="sidebar" id="weak-versions-of-set-and-map-gnCqHkcOuY">
+<h5>"Weak" versions of Set and Map</h5>
+
+<p>Before we leave our discussion of sets and maps, you should note that there are also <code>WeakSet</code> and <code>WeakMap</code>. The main differences between them and their "strong" ("normal strength?") counterparts are:</p>
+
+<ul>
+	<li>They cannot be iterated (no <code>forEach</code> function)</li>
+	<li>They do not have a reference to their size</li>
+	<li>WeakSet cannot store primitives</li>
+	<li>They hold their keys "weakly", ie. available for garbage collection when they don't have any references</li>
+</ul>
+
+<p>Basically, with the weak forms, you give up capability of easily knowing what is inside or applying functions to the whole set. And what you gain is control over memory leaks and privacy.</p>
+</aside>
+</section>
+
+<section data-type="sect2" id="array-alternative-bit-fields-v9sMTWuY">
+<h2>Array Alternative: Bit Fields</h2>
+
+<p>One more candidate for replacing arrays deserves a mention: bit fields. If you have an array that stores booleans, you might want bit fields in some cases. In a way, there is no native implementation of bit fields in JavaScript. In another way, you have access to numbers and bit-wise arithmetic, and that's all you need.</p>
+
+<p>Imagine you had the following conditionals:</p>
+
+<pre data-type="programlisting">
+states = [true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          false,
+          true]
+</pre>
+
+<p>You could also represent these in binary as: <code>0b11111101</code></p>
+
+<p>If you had a conditional that was only valid under these conditions, you could do something like this:</p>
+
+<pre data-type="programlisting">
+if(state[0] &amp;&amp; state[1] &amp;&amp; state[2] &amp;&amp; state[3] &amp;&amp; state[4] 
+&amp;&amp; state[5] &amp;&amp; !state[6] &amp;&amp; state[7]){
+  //something something </pre>
+
+<p>Because these states have little meaning by themselves, one potential refactoring would be to move these conditions into a function:</p>
+
+<pre data-type="programlisting">
+if(stateIsOk()){
+  // something something
+...
+
+stateIsOk = function(state){
+  return state[0] &amp;&amp; state[1] &amp;&amp; state[2] &amp;&amp; state[3] &amp;&amp; state[4] &amp;&amp;
+    state[5] &amp;&amp; !state[6] &amp;&amp; state[7]
+}
+
+</pre>
+
+<p>But if you stored your state in a bit field, you could do this instead:</p>
+
+<pre data-type="programlisting">
+if(state===0b11111101){
+  // something something
+
+// or you can give this state a more specific name
+
+if(stateIsOk()){
+&nbsp;&nbsp;// something something
+...
+
+stateIsOk = function(state){
+&nbsp; return state===0b11111101;
+}
+</pre>
+This has more potential for performance optimization than refactoring, because bit-wise arithmetic is super fast, but a little tricky to work with in many applications. If you're doing something that is graphically intensive and/or needs to be fast (like a game), keep this array-like representation in mind.
+
+<p>Extracting this function is nice because we can easily describe (via the function name) what <code>0b11111101</code> actually means. Speaking of extracting functions, we're about to do a whole bunch of that in the next section.</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="testing-what-we-have-8GsKS8">
+<h1>Testing What We Have</h1>
+
+<p>For our changes so far, we could limp along without needing to pull in a testing framework, instead manually testing with <code>console.log</code>. Everyone has a different tolerance for how big and complex a project should be before tooling up certain aspects, including testing. For some, visually inspecting the correct output might have been enough of a hassle to motivate testing early on. Others might have felt a lack of confidence by not testing low-level functions from the very start.</p>
+
+<p>On the other hand, there is a case for sticking with high-level tests (even manual ones like ours) until your code begins to take a bit more shape. For a good number of tests that cover low-level refactorings, they may provide extra work without extra confidence.</p>
+
+<p>For instance, if you know that you have dead code, do you want to test it before you delete it? If you have a function that you know you want to rename, do you really want to test it beforehand?</p>
+
+<aside data-type="sidebar" id="four-more-testing-philosophies-pACJU6S7">
+<h5>Four More Testing Philosophies</h5>
+
+<p>The combination of unit and high-level testing in JavaScript (including testing private functions when you feel like, and using TDD when it works well for you and your team) is fairly mainstream, although this book emphasizes characterization tests because they are are terribly underrated.</p>
+
+<p>It is a good approach to be comfortable with, and tends to mesh well with most teams. However, there are a few other testing approaches that are worth considering.</p>
+
+<ul>
+	<li>Unit tests are a waste of time (only high-level tests/metrics matter) – I've never heard this from a competent engineer who is <em>currently</em> working on coding tasks, rather than as a manager or consultant focused more on high-level goals.</li>
+	<li>TATFT (Test All The <strong>[Redacted]</strong> Time) – In this approach, you test everything. You test your dependencies. You test your tests. You test everything. I've never personally seen people adapt this in practice, but I've definitely seen it inspire people to write more tests.</li>
+	<li>If it compiles (type checks), it works – For languages that care about type safety (like Haskell, or the compiles-to-js variant, PureScript), many errors that would come up at run-time simply won't happen. However, even in the case of type-safe, idempotent, pure functions, logic errors are still possible, so using a functional language doesn't actually let you off the hook for testing.</li>
+	<li>UUM (Uses Until Modification) – This is a nuanced view on testing that suggests the degree to which you test code should be proportional to how much it will be used before it is modified. If it's in your editor, actively being worked on, then it will be used zero times before it's modified, so no test is necessary. If it's headed out into the world where millions of people use it (whether a developer library or something facing the general public), then it should have more tests. The original post is only a few bullet points long, and can be seen <a href="http://foysavas.com/posts/2014/01/13/uum-a-new-code-metric/">here</a>.</li>
+</ul>
+</aside>
+
+<p>In any case, in this chapter, our changes are much more aggressive. In order to approach those changes with confidence, we're going to need more tests. Before we make any more changes, we're going to test what we have now.</p>
+
+<p>In case it isn't obvious what we would want to test, the premise is that we want to convert our manual workflow into an automated one. That means that anything that we've been looking to for output should be inside of a test.</p>
+
+<div data-type="note" id="code-wanting-to-be-better-nnupfxSL"><h6>Note</h6>
+<h1>Code Wanting to be Better</h1>
+
+<p>If you look at code in a certain way, you can see how <em>it wants</em> to be better. Long files want to be shorter. Comments explaining a few lines of code want to be functions named with the comment that wrap up those few lines. As it applies to us right now, these logging statements want to be functions.</p>
+</div>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="our-setup-test-basKuLSn">
+<h2>Our Setup Test</h2>
+
+<p>Before we start on testing the actual behavior of our code, it's useful to have a test to just ensure that everything is working properly.</p>
+
+<p>Add this to the bottom of your file:</p>
+
+<pre data-type="programlisting">
+var wish = require('wish');
+describe('the file', function() {
+&nbsp; it('works', function(){
+    wish(true);
+  });
+});
+</pre>
+
+<p>Note that you may also need to run these commands from the command line:</p>
+
+<pre data-type="programlisting">
+<strong>npm install mocha
+npm install wish</strong>
+</pre>
+
+<p>Now if we run with <strong><code>mocha nb.js</code></strong> we should see a passing test as well as our logging information.</p>
+
+<div data-type="note" id="dont-forget-about-the-watcher-L9uDfOuXSj"><h6>Note</h6>
+<h1>Don't forget about the watcher</h1>
+
+<p>Don't forget about using <strong><code>mocha -w nb.js</code></strong> to run the watcher in a terminal window to update the results when you make changes.</p>
+</div>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect2" id="characterization-tests-for-classify-VDsRSWSj">
+<h2>Characterization Tests for <code>classify</code></h2>
+
+<p>Instead of using <code>console.log</code> at the end of functions, we can actually return something from them that we can test. Add this inside the <code>describe</code> block (the classify line is the same as from before):</p>
+
+<pre data-type="programlisting">
+it('classifies', function(){
+&nbsp; classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+});
+</pre>
+
+<p>Next, at the very end of the classify function, have it return in addition to logging:</p>
+
+<pre data-type="programlisting">
+function classify(chords){
+...
+  });
+&nbsp; console.log(classified);
+&nbsp; return classified;  // this line is new
+};
+</pre>
+Back to the test, we know that, since we're lacking coverage, we want to write a characterization test. Let's use the characterization mode of wish by supplying a second parameter of <code>true</code>, and let the test output tell us what the output is. Make the <code>"classifies"</code> test look like this:
+
+<pre data-type="programlisting">
+&nbsp; it('classifies', function(){
+&nbsp;&nbsp;&nbsp; var classified = classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+&nbsp;&nbsp;&nbsp; wish(classified.get('easy'), true);
+&nbsp;&nbsp;&nbsp; wish(classified.get('medium'), true);
+&nbsp;&nbsp;&nbsp; wish(classified.get('hard'), true);
+&nbsp; });
+</pre>
+
+<p>After running <strong><code>mocha</code></strong>, this leads to:</p>
+
+<pre data-type="programlisting">
+WishCharacterization: classified.get('easy') 
+  evaluated to 1.3433333333333333</pre>
+
+<p>And then we can just put that value into our test:</p>
+
+<pre data-type="programlisting">
+// replace this
+wish(classified.get('easy'), true);
+
+// with this
+wish(classified.get('easy') === 1.3433333333333333);
+</pre>
+
+<p>Run <strong><code>mocha</code></strong> again and:</p>
+
+<pre data-type="programlisting">
+WishCharacterization: classified.get('medium') 
+&nbsp;&nbsp;evaluated to 1.5060259259259259</pre>
+
+<p>Perfect. Again, we replace the <code>, true</code> with the output value:</p>
+
+<pre data-type="programlisting">
+wish(classified.get('medium') === 1.5060259259259259);
+</pre>
+
+<p>&nbsp;Save, run <strong><code>mocha</code></strong> and, once again we get a characterization error:</p>
+
+<pre data-type="programlisting">
+WishCharacterization: classified.get('hard')
+&nbsp;&nbsp;evaluated to 1.6884223991769547
+</pre>
+
+<p>Now we have the information we need for the full test block:</p>
+
+<pre data-type="programlisting">
+it('classifies', function(){
+&nbsp; var classified = classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+&nbsp; wish(classified.get('easy') === 1.3433333333333333);
+&nbsp; wish(classified.get('medium') === 1.5060259259259259);
+&nbsp; wish(classified.get('hard') === 1.6884223991769547);
+});
+</pre>
+
+<p>Following that same process again, we can write a similar test for the other song we are classifying:</p>
+
+<pre data-type="programlisting">
+it('classifies again', function(){
+&nbsp; var classified = classify(['d', 'g', 'e', 'dm']);
+&nbsp; wish(classified.get('easy') === 2.023094827160494);
+&nbsp; wish(classified.get('medium') === 1.855758613168724);
+&nbsp; wish(classified.get('hard') === 1.855758613168724);
+});
+</pre>
+
+<p>Now we can remove three things:</p>
+
+<ul>
+	<li>Our logging statement (<code>console.log(classified);</code>) from the <code>classify</code> function</li>
+	<li>The calls to classify that are outside of the tests</li>
+	<li>The <code>"works"</code> test that we added to make sure our setup was ok</li>
+</ul>
+
+<p>You might be wondering why we didn't just copy the values from the <code>console.log</code> and put them in the test. The reason is so that we could have a test failure first. If we don't see a failure, we can't be totally certain that the specific action we took is actually what made the test pass. "Things seem to be functioning correctly" is not as confident of a statement as "I changed the test expectation to match the result of the failing characterization test, and that turned the test from red to green." That might seem subtle, but small steps are easier to undo. Also,</p>
+</section>
+
+<section data-type="sect2" id="testing-the-welcomemessage-00snsKSd">
+<h2>Testing the <code>welcomeMessage</code></h2>
+
+<p>Now let's add a new test for the welcome message (inside of the <code>describe</code> block). This time, instead of leaving our logging statement in place, let's move it into a test:</p>
+
+<pre data-type="programlisting">
+// delete this line from the file (near the top)
+console.log(`Welcome to ${fileName()}!`);
+
+// add this test inside of the <code>describe</code> block
+it('sets welcome message', function(){
+&nbsp; console.log(`Welcome to ${fileName()}!`);
+});
+</pre>
+
+<p>Right now, this passes, as there is no assertion made. But we still see the output from the logging statement, so we know the code still works. Let's add the assertion now:</p>
+
+<pre data-type="programlisting">
+it('sets welcome message', function(){
+&nbsp; console.log(`Welcome to ${fileName()}!`);
+  wish(welcomeMessage() === 'Welcome to nb.js!') // this line is new
+});
+</pre>
+
+<p>Note that we're intending to add a function here. This is not a characterization test. This is a unit test for a function that hasn't been written yet.</p>
+
+<p>We get an error:</p>
+
+<pre data-type="programlisting">
+ReferenceError: welcomeMessage is not defined
+</pre>
+
+<p>Great. Let's define that function to the top of the file:</p>
+
+<pre data-type="programlisting">
+function welcomeMessage(){
+&nbsp; return `Welcome to ${fileName()}!`;
+};
+</pre>
+
+<p>And the test passes, which means we no longer need to rely on the welcome message logging statement anywhere, including our test, so we can just have the following:</p>
+
+<pre data-type="programlisting">
+it('sets welcome message', function(){
+&nbsp; wish(welcomeMessage() === 'Welcome to nb.js!')
+});
+</pre>
+</section>
+
+<section data-type="sect2" id="testing-for-labelprobabilities-JXs2F8So">
+<h2>Testing for <code>labelProbabilities</code></h2>
+
+<p>Here, we'll take the same approach of moving the logging statement into a test, and then making it into a proper assertion. To start, delete this line from the <code>classify</code> function:</p>
+
+<pre data-type="programlisting">
+console.log(labelProbabilities);
+</pre>
+
+<p>And add this code inside of the <code>describe</code> block:</p>
+
+<pre class="drop-element-attached-top drop-element-attached-center drop-target-attached-bottom drop-target-attached-center" data-type="programlisting">
+it('label probabilities', function(){
+&nbsp; console.log(labelProbabilities);
+});</pre>
+
+<p>We can change that to a characterization test like this:</p>
+
+<pre data-type="programlisting">
+it('label probabilities', function(){&nbsp;
+  wish(labelProbabilities, true);
+});</pre>
+
+<p>When we run the test, our output tells us what we need to do next:</p>
+
+<pre data-type="programlisting">
+WishCharacterization: labelProbabilities
+evaluated to [["easy",0.3333333333333333],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ["medium",0.3333333333333333],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ["hard",0.3333333333333333]]
+</pre>
+
+<p>Since we know that we're dealing with <code>labelProbabilities</code> as a set, we can test individual components like this:</p>
+
+<pre data-type="programlisting">
+it('label probabilities', function(){
+&nbsp; wish(labelProbabilities.get('easy') === 0.3333333333333333);
+&nbsp; wish(labelProbabilities.get('medium') === 0.3333333333333333);
+&nbsp; wish(labelProbabilities.get('hard') === 0.3333333333333333);
+});</pre>
+
+<p>Now that we have high-level tests in place, we can refactor aggressively and with confidence.</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="extracting-functions-z1sdsg">
+<h1>Extracting Functions</h1>
+
+<p>Here we go! As we said in the last chapter, this section is about what is likely the most useful and underutilized refactoring technique: extracting functions.</p>
+
+<section data-type="sect2" id="getting-away-from-procedural-code-Y0sEH8sB">
+<h2>Getting Away from Procedural Code</h2>
+
+<p>If we look through the code at this point, we might notice that we have data (songs and labels) mixed in with our functions. Overall, our program looks like it has these steps:</p>
+
+<ul>
+	<li>set up data (songs and labels)</li>
+	<li>set up objects, sets and maps</li>
+	<li>train our classifier on the set of songs</li>
+	<li>set counts and probabilities</li>
+	<li>classify with new songs (handled by the tests)</li>
+</ul>
+
+<p>Right now, the first four steps are still spelled out awkwardly in a procedural and unstructured way.&nbsp;</p>
+
+<p>We want to get away from <em>running the file</em>, and start to think about <em>executing functions</em>. That means that anything not inside of a function or the testing code is a problem.</p>
+
+<p>The functions following functions are always run together:</p>
+
+<pre data-type="programlisting">
+setLabelProbabilities();
+setChordCountsInLabels();
+setProbabilityOfChordsInLabels();
+</pre>
+
+<p>That means we can wrap them in another function, and run that immediately. So we can wrap them in a function and call it like this:</p>
+
+<pre data-type="programlisting">
+function setLabelsAndProbabilities(){
+&nbsp; setLabelProbabilities();
+&nbsp; setChordCountsInLabels();
+&nbsp; setProbabilityOfChordsInLabels();
+};
+setLabelsAndProbabilities();
+</pre>
+
+<p>Note that we could also run this as an anonymous IIFE ("immediately invoked function expression"), like this:</p>
+
+<pre data-type="programlisting">
+(function(){
+&nbsp; setLabelProbabilities();
+&nbsp; setChordCountsInLabels();
+&nbsp; setProbabilityOfChordsInLabels();
+})();
+</pre>
+
+<p>But in doing that we lose some control. If we ever decided to call this more than once, we'll have to name it or find a way to run the code containing it each time.</p>
+
+<p>Anyways, for now, it doesn't actually matter when this function is called, as long as it is called just once, <em>after</em> the classifier is trained, but before we run <code>classify</code>.</p>
+
+<p>Let's add a <code>trainAll</code> function and call <code>setLabelsAndProbabilities</code> at the end of it. We won't call it anywhere else. Also, let's add a call to trainAll right after its declaration:</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; train(imagine, easy);
+&nbsp; train(somewhereOverTheRainbow, easy);
+&nbsp; train(tooManyCooks, easy);
+&nbsp; train(iWillFollowYouIntoTheDark, medium);
+&nbsp; train(babyOneMoreTime, medium);
+&nbsp; train(creep, medium);
+&nbsp; train(paperBag, hard);
+&nbsp; train(toxic, hard);
+&nbsp; train(bulletproof, hard);
+&nbsp; setLabelsAndProbabilities();
+};
+
+trainAll();
+
+function setLabelsAndProbabilities(){
+&nbsp; setLabelProbabilities();
+&nbsp; setChordCountsInLabels();
+&nbsp; setProbabilityOfChordsInLabels();
+};
+</pre>
+
+<p>Just like any other statement, we want <code>trainAll</code> to be part of our public interface (a <em>function</em> that we run, rather than <em>part of a file</em> that we run), so we should move it to happen right inside of the <code>describe</code> block of our tests:</p>
+
+<pre data-type="programlisting">
+describe('the file', function() {
+&nbsp; trainAll();
+</pre>
+
+<p>Next, we can extract a function for setting our songs and call it right away.</p>
+
+<pre data-type="programlisting">
+function setSongs(){
+&nbsp; imagine = ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'];
+&nbsp; somewhereOverTheRainbow = ['c', 'em', 'f', 'g', 'am'];
+&nbsp; tooManyCooks = ['c', 'g', 'f'];
+&nbsp; iWillFollowYouIntoTheDark = ['f', 'dm', 'bb', 'c', 'a', 'bbm'];
+&nbsp; babyOneMoreTime = ['cm', 'g', 'bb', 'eb', 'fm', 'ab'];
+&nbsp; creep = ['g', 'gsus4', 'b', 'bsus4', 'c', 'cmsus4', 'cm6'];
+&nbsp; paperBag = ['bm7', 'e', 'c', 'g',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b7', 'f', 'em', 'a',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'cmaj7', 'em7', 'a7', 'f7',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b'];
+&nbsp; toxic = ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7', 'g7'];
+&nbsp; bulletproof = ['d#m', 'g#', 'b', 'f#', 'g#m', 'c#'];
+};
+setSongs();
+</pre>
+
+<p>We know that we want this to happen once before training, so we can move our <code>setSongs()</code> function call (the last line of the previous snippet) to be inside <code>trainAll</code>:</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; setSongs();
+...
+</pre>
+
+<p>As always, after each of these changes, you should be noting the passing test suite, and committing the results.</p>
+
+<p>We want to do the same with the setup of difficulty variables and our containers (array, sets, and maps) that we use throughout the program, but if we take the same approach of extracting a function, our test suite will error. Try this:</p>
+
+<pre data-type="programlisting">
+function setDifficulties(){
+&nbsp; var easy = 'easy';
+&nbsp; var medium = 'medium';
+&nbsp; var hard = 'hard';
+};
+setDifficulties();
+</pre>
+
+<p>If we do this, our variables are stuck inside that function's scope, and no longer readable by other functions. Later, we'll be addressing how to tighten up the scopes for these variables, but for now, we can take the easy way out and leave these as global variables by omitting the <code>var</code> keyword.</p>
+
+<pre data-type="programlisting">
+function setDifficulties(){
+&nbsp; easy = 'easy';
+&nbsp; medium = 'medium';
+&nbsp; hard = 'hard';
+};
+setDifficulties();
+</pre>
+
+<p>And we can do the same for our other global variables (move them into a function, remove the scoping declaration, and call the function):</p>
+
+<pre data-type="programlisting">
+function setup(){
+&nbsp; songs = [];
+&nbsp; allChords = new Set();
+&nbsp; labelCounts = new Map();
+&nbsp; labelProbabilities = new Map();
+&nbsp; chordCountsInLabels = new Map();
+&nbsp; probabilityOfChordsInLabels = new Map();
+};
+setup();
+</pre>
+
+<p>Next, we can move the function calls into our <code>trainAll</code> function:</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; setDifficulties();
+&nbsp; setup();
+&nbsp; setSongs();
+...
+</pre>
+
+<p>Make sure to remove those three calls (<code>setDifficulties</code>, <code>setup</code>, and <code>setSongs</code>) from other places in the program. Assuming you've done that, now everything is either inside of a function or the test code.</p>
+
+<aside data-type="sidebar" id="oh-no-var-was-deleted-everything-is-worse-now-gnCkhBHVsY">
+<h5>Oh no! <code>var</code> was deleted! Everything is worse now!</h5>
+
+<p>And we didn't even have <code>var</code> declarations for our songs to begin with! Bad code!</p>
+
+<p>Right?</p>
+
+<p>We'll talk about <code>var</code> and other scoping declarations later. For now, recognize that our program relied on these as global variables before. We're just not pretending they're not global by using the <code>var</code> keyword anymore.</p>
+
+<p>One way to fix this is by specifically scoping and passing them into each function that requires them. Done naively, this path would require a lot of changes, including more complex method signatures (more parameters) and more return values.&nbsp;</p>
+
+<p>At some point, we'll want to attach these variables to some object other than the global one, but for now, it's a win to have the interface well defined by the tests: they just run <code>trainAll</code> and <code>classify</code>, which means we're more concerned with the <em>contents</em> of the file as opposed to the <em>order</em>.</p>
+</aside>
+
+<p>Great. So now everything is inside of a function and our interface for the tests is well defined. We can extract more functions if we wanted to get more specific in places. For instance, we could change our <code>setup</code> function to do something like this instead (but don't do this):</p>
+
+<pre data-type="programlisting">
+function setSongsVariable(){
+  songs = [];
+}
+function setup(){
+&nbsp; setSongsVariable();
+&nbsp; allChords = new Set();
+&nbsp; labelCounts = new Map();
+&nbsp; labelProbabilities = new Map();
+&nbsp; chordCountsInLabels = new Map();
+&nbsp; probabilityOfChordsInLabels = new Map();
+};
+</pre>
+
+<p>And we could do that with the rest of the lines in <code>setup</code> as well. Or we could use it to group some lines inside (don't do this either):</p>
+
+<pre data-type="programlisting">
+function setSome(){
+&nbsp; songs = [];
+&nbsp; allChords = new Set();
+&nbsp; labelCounts = new Map();
+}
+function setOthers(){
+&nbsp; labelProbabilities = new Map();
+&nbsp; chordCountsInLabels = new Map();
+&nbsp; probabilityOfChordsInLabels = new Map();
+}
+function setup(){
+&nbsp; setSome();
+&nbsp; setOthers();
+};
+</pre>
+
+<p>We can add as much indirection as we'd like by extracting functions, and use it to group things where it makes sense. But these changes don't actually help our code be more clear. We're just grouping arbitrary lines at this point.</p>
+
+<p>The opposite of <em>extracting</em> functions is <em>inlining</em> them. When an extracted function&nbsp; doesn't really do anything, it's sensible to inline it. If you did extract those functions, let's inline them and restore our <code>setup</code> function to how it was:</p>
+
+<pre data-type="programlisting">
+function setup(){
+&nbsp; songs = [];
+&nbsp; allChords = new Set();
+&nbsp; labelCounts = new Map();
+&nbsp; labelProbabilities = new Map();
+&nbsp; chordCountsInLabels = new Map();
+&nbsp; probabilityOfChordsInLabels = new Map();
+};
+</pre>
+
+<p>If you're wondering what the point of that was, it's that extracting and inlining functions should come as naturally to you as introducing and inlining variables.</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="extracting-and-naming-anonymous-functions-v9sGUKsY">
+<h2>Extracting and Naming Anonymous Functions</h2>
+In addition to extracting functions in order to group behavior, it is also useful when naming anonymous functions. We have some anonymous functions in our program. For examples, look at any code that follows a <code>forEach</code> or the second parameter to the <code>describe</code> and <code>it</code> function calls in the test.
+
+<p>We could extract some of these functions, but to demonstrate the benefits a bit more simply, let's take a look at some pedestrian jQuery code that visits a url when a button is clicked.</p>
+
+<pre data-type="programlisting">
+$('.my-button').on('click', function(){
+  window.location = "http://refactoringjs.com";
+});
+$('.other-button').on('click', function(){
+&nbsp;&nbsp;window.location = "http://refactoringjs.com";
+});
+</pre>
+
+<p>Some people would correctly identify that duplication as a maintenance problem deserving of some kind of fix. Unfortunately, many of them would jump to this solution, simply extracting a variable, and stop there:</p>
+
+<pre data-type="programlisting">
+var siteUrl = "http://refactoringjs.com";
+$('.my-button').on('click', function(){
+&nbsp;&nbsp;window.location = siteUrl;
+});
+$('.other-button').on('click', function(){
+&nbsp;&nbsp;window.location = siteUrl;
+});
+</pre>
+
+<p>This does make it easier to change <code>siteUrl</code> in the future (assuming it is used in other places), but we can reduce duplication further by extracting a function:</p>
+
+<pre data-type="programlisting">
+var siteUrl = "http://refactoringjs.com";
+function visitSite(){
+  window.location = siteUrl;
+} 
+$('.my-button').on('click', function(){
+&nbsp; visitSite();
+});
+$('.other-button').on('click', function(){
+&nbsp; visitSite();
+});</pre>
+
+<p>Now our implementation will be easier to change in the future, but what good does wrapping our function call in a function accomplish? Nothing!</p>
+
+<pre data-type="programlisting">
+var siteUrl = "http://refactoringjs.com";
+function visitSite(){
+&nbsp;&nbsp;window.location = siteUrl;
+}
+$('.my-button').on('click', visitSite);
+$('.other-button').on('click', visitSite);
+</pre>
+
+<p>Now we can keep our click handlers together. This organization is much better.</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="function-calls-and-function-literals-pNsYTas7">
+<h2>Function Calls and Function Literals</h2>
+
+<p>For programmers who are new to JavaScript or those who mostly work in some other language on the backend, there is some confusion over function syntax that makes this type of refactoring difficult for them.</p>
+
+<p>This is an anonymous function literal:</p>
+
+<pre data-type="programlisting">
+function(){};</pre>
+
+<p>This is a named function literal:</p>
+
+<pre data-type="programlisting">
+function visitSite(){};
+</pre>
+
+<p>This is an anonymous function literal assigned to a variable:</p>
+
+<pre data-type="programlisting">
+var visitSite = function(){};</pre>
+
+<p>This is a function call:</p>
+
+<pre data-type="programlisting">
+visitSite();
+</pre>
+
+<p>The only way to call an anonymous function (the first one, when it is not assigned to a variable as in the third snippet) is by running the containing code:</p>
+
+<pre data-type="programlisting">
+(function(){})();
+//or
+(function(){}());
+</pre>
+
+<p>This is called an IIFE ("iffy") or "Immediately Invoked Function Expression." It is a function call.</p>
+
+<p>The confusion comes when people don't realize that an anonymous function declaration, when replaced with a named function for reuse, is as we did it with a function <em>reference</em>:</p>
+
+<pre data-type="programlisting">
+$('.my-button').on('click', visitSite);
+</pre>
+
+<p>And NOT with a function call like this:</p>
+
+<pre data-type="programlisting">
+$('.my-button').on('click', visitSite());</pre>
+
+<p>You should be passing a reference to the <code>visitSite</code> function into the <code>on</code> function, not a function call.</p>
+
+<p>Additional confusion arises when a parameter is used by the function being referenced. If our function looked like this:</p>
+
+<pre data-type="programlisting">
+function visitSite(siteUrl){
+&nbsp;&nbsp;window.location = siteUrl;
+}
+</pre>
+
+<p>Some people would be tempted to write the click handler like this:</p>
+
+<pre data-type="programlisting">
+$('.my-button').on('click', visitSite("http://refactoringjs.com"));
+</pre>
+
+<p>But that won't work. In this case, the most obvious solution would be using an anonymous function to wrap the call like before:</p>
+
+<pre data-type="programlisting">
+$('.my-button').on('click', function(){
+&nbsp; visitSite("http://refactoringjs.com");
+});
+</pre>
+
+<p>Another solution, which applies not only to the <code>on</code> function of jQuery, but native JavaScript functions like <code>forEach</code> and <code>map</code> as well, is to pass another argument along with the others. In many cases, what you pass will end up being the "implicit" parameter (the <code>this</code>) of the function that you are calling, but if you are defining a function that takes a function as an argument, you could also design the function signature to take arguments that will become explicit arguments to the function passed.</p>
+
+<p>In any case, when you are passing functions inside of functions, you should keep two things in mind. First, consult the API of the function that takes a function as an argument for any optional arguments that can be passed in, and know what happens when they are not. Second, recognize that JavaScript function calls will work fine with too many or too few arguments. You will get an error <em>inside</em> of the function if you try call it and make use of a parameter that was not defined by the signature. Also, any parameters that are unfulfilled by the function call will be set as <code>undefined</code>.</p>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="streamlining-the-api-with-one-global-object-xbsOF6">
+<h1>Streamlining the API with one global object</h1>
+
+<p>At this point, we have everything wrapped up into functions, but we still have many global variables floating around (this includes our functions as well as variables set without <code>var</code>). In this section, we have two goals. The first is to reduce the scope of all of the global variables we have. The second is to design our API, in other words, make decisions about how our code will be used.</p>
+
+<p>For the style of code we're exploring here, we want one main object, which we will call <code>classifier</code>, and it will hold all of the functions and incidental variables created along the way. We'll explore its creation through multiple mechanisms (factory function, constructor function, and class), and in all cases, we'll be working with it in an OOP fashion. That means we'll be using language constructs like <code>this</code> and allowing our <code>classifier</code> object to mutate throughout the execution of our program.</p>
+
+<p>If you'd prefer to work toward a functional approach, rather than an OOP one, some of what follows will not follow the path you want to go. For that path, I would recommend still reading through the rest of this chapter and then looking into Chapter 11. But the we spend much time "<code>this</code>-ifying" for the OOP style here will need extra work to convert to FP style. The reason is that OOP will lead us to having a main mutable object (although it could reasonably break down into smaller objects), whereas in FP, we want treat our bounding object (<code>classifier</code>) as more of a dumb namespace for functions.</p>
+
+<p>A functional version of NBC is provided in Chapter 11. If you're interested in getting to that point, try starting from the code we have here as well as the code you have at the end of this chapter. I suspect you'll find code that is split into functions (but not as heavily invested in OOP as the code at the end of this chapter) like we have at this point easier to work with. By all means, try both approaches if that interests you.</p>
+
+<p>For the rest of the chapter, we'll be ignoring the <code>welcomeMessage</code> and <code>fileName</code> functions, as well as the accompanying test. In case you're lost at this point, or want to build an FP version starting from what we have now, here is the code:</p>
+
+<pre data-type="programlisting">
+function setDifficulties(){
+&nbsp; easy = 'easy';
+&nbsp; medium = 'medium';
+&nbsp; hard = 'hard';
+};
+
+function setSongs(){
+&nbsp; imagine = ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'];
+&nbsp; somewhereOverTheRainbow = ['c', 'em', 'f', 'g', 'am'];
+&nbsp; tooManyCooks = ['c', 'g', 'f'];
+&nbsp; iWillFollowYouIntoTheDark = ['f', 'dm', 'bb', 'c', 'a', 'bbm'];
+&nbsp; babyOneMoreTime = ['cm', 'g', 'bb', 'eb', 'fm', 'ab'];
+&nbsp; creep = ['g', 'gsus4', 'b', 'bsus4', 'c', 'cmsus4', 'cm6'];
+&nbsp; paperBag = ['bm7', 'e', 'c', 'g',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b7', 'f', 'em', 'a',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'cmaj7', 'em7', 'a7', 'f7',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b'];
+&nbsp; toxic = ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7', 'g7'];
+&nbsp; bulletproof = ['d#m', 'g#', 'b', 'f#', 'g#m', 'c#'];
+};
+
+function setup(){
+&nbsp; songs = [];
+&nbsp; allChords = new Set();
+&nbsp; labelCounts = new Map();
+&nbsp; labelProbabilities = new Map();
+&nbsp; chordCountsInLabels = new Map();
+&nbsp; probabilityOfChordsInLabels = new Map();
+};
+
+function train(chords, label){
+&nbsp; songs.push({label: label, chords: chords});
+&nbsp; chords.forEach(chord =&gt; allChords.add(chord));
+&nbsp; if(Array.from(labelCounts.keys()).includes(label)){
+&nbsp;&nbsp;&nbsp; labelCounts.set(label, labelCounts.get(label) + 1);
+&nbsp; } else {
+&nbsp;&nbsp;&nbsp; labelCounts.set(label, 1);
+&nbsp; }
+};
+
+function setLabelProbabilities(){
+&nbsp; labelCounts.forEach(function(_count, label){
+&nbsp;&nbsp;&nbsp; labelProbabilities.set(label, labelCounts.get(label) / songs.length);
+&nbsp; })
+};
+
+function setChordCountsInLabels(){
+&nbsp; songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; if(chordCountsInLabels.get(song.label) === undefined){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels.set(song.label, {})
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(chordCountsInLabels.get(song.label)[chord] &gt; 0){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels.get(song.label)[chord] += 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chordCountsInLabels.get(song.label)[chord] = 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; });
+&nbsp; });
+}
+
+function setProbabilityOfChordsInLabels(){
+&nbsp; probabilityOfChordsInLabels = chordCountsInLabels;
+&nbsp; probabilityOfChordsInLabels.forEach(function(_chords, difficulty){
+&nbsp;&nbsp;&nbsp; Object.keys(probabilityOfChordsInLabels.get(difficulty)).forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; probabilityOfChordsInLabels.get(difficulty)[chord] /=&nbsp; songs.length;
+&nbsp;&nbsp;&nbsp; })
+&nbsp; })
+}
+
+function trainAll(){
+&nbsp; setup();
+&nbsp; setDifficulties();
+&nbsp; setSongs();
+&nbsp; train(imagine, easy);
+&nbsp; train(somewhereOverTheRainbow, easy);
+&nbsp; train(tooManyCooks, easy);
+&nbsp; train(iWillFollowYouIntoTheDark, medium);
+&nbsp; train(babyOneMoreTime, medium);
+&nbsp; train(creep, medium);
+&nbsp; train(paperBag, hard);
+&nbsp; train(toxic, hard);
+&nbsp; train(bulletproof, hard);
+&nbsp; setLabelsAndProbabilities();
+};
+
+function setLabelsAndProbabilities(){
+&nbsp; setLabelProbabilities();
+&nbsp; setChordCountsInLabels();
+&nbsp; setProbabilityOfChordsInLabels();
+};
+
+function classify(chords){
+&nbsp; var smoothing = 1.01;
+&nbsp; var classified = new Map();
+&nbsp; labelProbabilities.forEach(function(_probabilities, difficulty){
+&nbsp;&nbsp;&nbsp; var first = labelProbabilities.get(difficulty) + smoothing;
+&nbsp;&nbsp;&nbsp; chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; var probabilityOfChordInLabel = probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; first = first * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; })
+&nbsp;&nbsp;&nbsp; classified.set(difficulty, first);
+&nbsp; });
+&nbsp; return classified;
+};
+
+var wish = require('wish');
+describe('the file', function() {
+&nbsp; trainAll();
+&nbsp; it('classifies', function(){
+&nbsp;&nbsp;&nbsp; var classified = classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+&nbsp;&nbsp;&nbsp; wish(classified.get('easy') === 1.3433333333333333);
+&nbsp;&nbsp;&nbsp; wish(classified.get('medium') === 1.5060259259259259);
+&nbsp;&nbsp;&nbsp; wish(classified.get('hard') === 1.6884223991769547);
+&nbsp; });
+
+&nbsp; it('classifies again', function(){
+&nbsp;&nbsp;&nbsp; var classified = classify(['d', 'g', 'e', 'dm']);
+&nbsp;&nbsp;&nbsp; wish(classified.get('easy') === 2.023094827160494);
+&nbsp;&nbsp;&nbsp; wish(classified.get('medium') === 1.855758613168724);
+&nbsp;&nbsp;&nbsp; wish(classified.get('hard') === 1.855758613168724);
+&nbsp; });
+
+&nbsp; it('label probabilities', function(){
+&nbsp;&nbsp;&nbsp; wish(labelProbabilities.get('easy') === 0.3333333333333333);
+&nbsp;&nbsp;&nbsp; wish(labelProbabilities.get('medium') === 0.3333333333333333);
+&nbsp;&nbsp;&nbsp; wish(labelProbabilities.get('hard') === 0.3333333333333333);
+&nbsp; });
+});
+</pre>
+
+<p>&nbsp;</p>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="extracting-the-classifier-object-andnbspandnbsp-00sJu1Fd">
+<h2>Extracting the <code>classifier</code> Object &nbsp;&nbsp;</h2>
+
+<p>To address our global variables (and functions) we'll create an object called <code>classifier</code> to store those, so that they're not attached directly to the global object. Put this at the top of your file:</p>
+
+<pre data-type="programlisting">
+var classifier = {};
+</pre>
+
+<p>Then inside of <code>trainAll</code>, instead of <code>setup</code> being run as a function of the global object, call it as part of this classifier:</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; classifier.setup();
+...
+</pre>
+
+<p>Now we need to move our <code>setup</code> function into our <code>classifier</code> object. Let's add this function to that object that was on top. You can also delete the old <code>setup</code> function.</p>
+
+<pre data-type="programlisting">
+var classifier = {
+&nbsp; setup: function(){
+&nbsp;&nbsp;&nbsp; this.songs = [];
+&nbsp;&nbsp;&nbsp; this.allChords = new Set();
+&nbsp;&nbsp;&nbsp; this.labelCounts = new Map();
+&nbsp;&nbsp;&nbsp; this.labelProbabilities = new Map();
+&nbsp;&nbsp;&nbsp; this.chordCountsInLabels = new Map();
+&nbsp; }
+};
+</pre>
+
+<p>We want these variables to be part of <code>classifier</code>, so we need to add a <code>this.</code> in front of each of them. Notice that <code>setup</code> is a property with the label (<code>setup</code>) followed by a function literal that contains the body of the function.</p>
+
+<p>It would be great if the tests passed at this point, but they don't. Fortunately, running the tests will report a useful error:</p>
+
+<pre data-type="programlisting">
+ReferenceError: songs is not defined</pre>
+
+<p>And here we have some very boring and repetitive, but relatively easy changes to make. We need to add a <code>classifier.</code> in front of every reference to the following variables (that don't start with <code>this.</code>): <code>songs</code>, <code>allChords</code>, <code>labelCounts</code>, <code>labelProbabilities</code>, <code>chordCountsInLabels</code>, and <code>probabilityOfChordsInLabels</code>. Make those changes now.</p>
+
+<p>The tests should pass again. Save and commit those changes.</p>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="inlining-the-setup-functionandnbsp-37sdsEF0">
+<h2>Inlining the <code>setup</code> Function&nbsp;</h2>
+
+<p>Now that we look at our <code>setup</code> function attached to <code>classifier</code> however, we might notice that it's not doing much work. We can assign those variables directly to the object without using a wrapping function at all:</p>
+
+<pre data-type="programlisting">
+var classifier = {
+&nbsp; songs: [],
+&nbsp; allChords: new Set(),
+&nbsp; labelCounts: new Map(),
+&nbsp; labelProbabilities: new Map(),
+&nbsp; chordCountsInLabels: new Map()
+};
+</pre>
+
+<p>Notice that the function wrapping is gone, but the syntax inside has been tweaked, for example, instead of this:</p>
+
+<pre data-type="programlisting">
+this.songs = [];
+</pre>
+
+<p>we now have this:</p>
+
+<pre data-type="programlisting">
+songs: [],</pre>
+
+<p>The comma vs. semicolon is easy to miss. And we can also delete the call to <code>setup</code> in <code>trainAll</code>:</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; classifier.setup(); //delete this line
+...
+</pre>
+
+<p>That's great, not only because we have one less line, but also because our training code really doesn't have anything to do with the general setup of our <code>classifier</code>.</p>
+
+<p>Save/Test/Commit to make sure everything still looks good.</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="extracting-the-songlist-object-ZDs8iOFM">
+<h2>Extracting the <code>songList</code> Object</h2>
+
+<p>Next let's consider how we're adding songs to be trained. <code>setSongs</code> defines global variables for each song name, and then each of those is referenced in the <code>trainAll</code> function. This coupling is error prone and not really scalable. Clearly, if we alter our list of songs, we have to do it in two places. But worse than that, we are not prepared for a likely case where we would have a <em>database</em> of songs to train, rather than a handful that we hardcode into a <em>file</em>.</p>
+
+<p>Let's make a <code>songList</code> object that contains the songs in an array and has a function to add songs to it. This can go at the top of your file:</p>
+
+<pre data-type="programlisting">
+var songList = {
+&nbsp; songs: [],
+&nbsp; addSong: function(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp; this.songs.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords: chords,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulty: difficulty});
+&nbsp; }
+};</pre>
+
+<p>Let's change our <code>setSongs</code> function to make use of this <code>songList</code> object.</p>
+
+<pre data-type="programlisting">
+function setSongs(){
+&nbsp; songList.addSong('imagine', ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], easy)
+&nbsp; songList.addSong('somewhereOverTheRainbow', ['c', 'em', 'f', 'g', 'am'], easy)
+&nbsp; songList.addSong('tooManyCooks', ['c', 'g', 'f'], easy)
+&nbsp; songList.addSong('iWillFollowYouIntoTheDark', ['f', 'dm', 'bb', 'c', 'a', 'bbm'], medium);
+&nbsp; songList.addSong('babyOneMoreTime',&nbsp; ['cm', 'g', 'bb', 'eb', 'fm', 'ab'], medium);
+&nbsp; songList.addSong('creep',&nbsp; ['g', 'gsus4', 'b', 'bsus4', 'c', 'cmsus4', 'cm6'], medium);
+&nbsp; songList.addSong('paperBag', ['bm7', 'e', 'c', 'g',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b7', 'f', 'em', 'a',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'cmaj7', 'em7', 'a7', 'f7',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'b'], hard);
+&nbsp; songList.addSong('toxic', ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7', 'g7'], hard);
+&nbsp; songList.addSong('bulletproof', ['d#m', 'g#', 'b', 'f#', 'g#m', 'c#'], hard);
+};
+</pre>
+
+<p>If we run the tests now, we get errors because our variables named by the song names are no longer available. We need to change our <code>trainAll</code> function to add the songs from the <code>songList</code>.</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; setDifficulties();
+&nbsp; setSongs();
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; train(song.chords, song.difficulty);
+&nbsp; });
+&nbsp; setLabelsAndProbabilities();
+};
+</pre>
+
+<p>And now our tests are back in working order.</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="handling-the-remaining-global-variables-AZszIvFQ">
+<h2>Handling the Remaining Global Variables</h2>
+
+<p>We're still left with those three nagging global variables to represent difficulty.</p>
+
+<p>As a first effort, since they are only referenced inside of <code>setSongs</code>, we can simply inline the variables there:</p>
+
+<pre data-type="programlisting">
+function setSongs(){
+&nbsp; var easy = 'easy';
+&nbsp; var medium = 'medium';
+&nbsp; var hard = 'hard';
+...
+</pre>
+
+<p>And now we can delete the function <code>setDifficulties</code> and our call to it inside of <code>trainAll</code>. Tests should be passing at this point.</p>
+
+<p>Following that, it might seem a waste to complicate our <code>setSongs</code> function with these variables. What if we just used an array for <code>difficulties</code>, and let the <code>songList</code> handle the strings?</p>
+
+<pre data-type="programlisting">
+var songList = {
+&nbsp; difficulties: ['easy', 'medium', 'hard'],
+&nbsp; songs: [],
+&nbsp; addSong: function(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp; this.songs.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords: chords,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulty: this.difficulties[difficulty]})
+&nbsp; }
+}
+</pre>
+
+<p>Here, we've created a <code>difficulties</code> attribute in <code>songList</code> as an array with the desired labels. Then, when we add a song, we're expecting the array index to come through and assigning as needed with <code>this.difficulties[difficulty]</code>.</p>
+
+<p>This means we can get rid of the label description noise in <code>setSongs</code> and use numbers instead of the variables we were using before. Notice the numbers (all 0, so they will be interpreted as "easy" later) as the third parameter of the <code>addSong</code> function calls.</p>
+
+<pre data-type="programlisting">
+function setSongs(){
+&nbsp; songList.addSong('imagine', ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], 0)
+&nbsp; songList.addSong('somewhereOverTheRainbow', ['c', 'em', 'f', 'g', 'am'], 0)
+&nbsp; songList.addSong('tooManyCooks', ['c', 'g', 'f'], 0)
+...
+</pre>
+
+<p>Save/Test/Commit</p>
+</section>
+
+<section data-type="sect2" id="making-data-independent-from-the-program-wbs7HkFl">
+<h2>Making Data Independent from the Program</h2>
+
+<p>Let's think about that <code>trainAll</code> function for a minute. What does <em>setting</em> songs have to do with <em>training</em> our classifier? Nothing at all really. What if we move the call to <code>setSongs</code> into our test?</p>
+
+<pre data-type="programlisting">
+describe('the file', function() {
+&nbsp; setSongs(); //moved and deleted from inside of trainAll
+&nbsp; trainAll();
+</pre>
+
+<p>And while we're at it, does setting the songs have anything to do with the <em>structure</em> of our program at all? No. It's only data that we are setting and using. That means it is part of the execution of one possibility of our program, not the program itself. That implies that the function of <code>setSongs</code> itself belongs in the tests. Let's add the function body to the tests and remove the function from the program completely:</p>
+
+<pre data-type="programlisting">
+describe('the file', function() {
+&nbsp; songList.addSong('imagine', ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], 0)
+...
+&nbsp; songList.addSong('toxic', ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7', 'g7'], 2);
+&nbsp; songList.addSong('bulletproof', ['d#m', 'g#', 'b', 'f#', 'g#m', 'c#'], 2);
+&nbsp; trainAll();
+...
+</pre>
+
+<p>Now we're free to execute the program independently of the data provided. This is a huge step, and opens our program up to further testing and putting it into production as a module.</p>
+</section>
+
+<section data-type="sect2" id="scoping-declarations-var-let-and-const-q2s1hqFL">
+<h2>Scoping Declarations: <code>var</code>, <code>let</code>, and <code>const</code></h2>
+
+<p>Moving on to other scoping concerns, let's talk about scoping declarations: <code>var</code>, <code>let</code> and <code>const</code>. <code>var</code> has been around for the longest, so you're most likely to find it in older code bases or people who are stuck in an older mindset. Although <code>var</code> is better than nothing (a variable declaration, and necessarily an assignment, without any scoping declaration will create a global variable), <code>let</code> and <code>const</code> create tighter scopes (block scope rather than just functional scope). The difference between <code>let</code> and <code>const</code> is that <code>const</code> will not allow a variable to be reassigned.</p>
+
+<p>We have 9 instances of <code>var</code> in our program right now. Should we change any of them? If so, should they change to <code>let</code> or <code>const</code>?</p>
+
+<div data-type="warning" id="const-does-not-mean-immutability-l2uVh1hPFj"><h6>Warning</h6>
+<h1><code>const</code> does not mean immutability!</h1>
+
+<p>If you are thinking that const provides an easy path to immutability, I'm sorry to report the sad news. It does prevent a variable from being reassigned (ie. using the <code>=</code> operator), but the contents of the variable can still change. Array indexes can be updated. Same goes for object attributes and members of sets and maps.</p>
+
+<p><code>Object.freeze</code> to the rescue!? Almost. If you you freeze an object that is more than one level deep, you can still update those inner properties. Also, even if you freeze an object, if it was declared with <code>var</code> or <code>let</code>, you can still reassign it.</p>
+
+<p>To <em>ensure</em> immutability, you'll need to go further, and might find it easier to use a packaged solution like immutable.js or mori.js, which provide immutable versions of arrays, maps, sets, and so on. Even if you're not using anything that enforces it, it's best to try to create new variables rather than repurposing them.</p>
+</div>
+
+<p>In general, it's preferable to use <code>const</code>. The less that your variables are reassigned, the better.</p>
+
+<p>Since we have tests in place, we can make the bold assumption that all of our <code>var</code> declarations should be <code>const</code> instead. Search and replace those, and then run the tests.</p>
+
+<pre data-type="programlisting">
+TypeError: Assignment to constant variable.</pre>
+
+<p>The error description "constant variable" is worth noting, but let's move on. Unsurprisingly, our bold assumption is wrong, but only in one case. Our <code>first</code> variable inside of the <code>classify</code> function requires reassignment for now, so the following line should be modified to use let:</p>
+
+<pre data-type="programlisting">
+const first = classifier.labelProbabilities.get(difficulty) + smoothing;
+</pre>
+
+<p>It should be:</p>
+
+<pre data-type="programlisting">
+let first = classifier.labelProbabilities.get(difficulty) + smoothing;</pre>
+</section>
+
+<section data-type="sect2" id="bringing-classify-into-the-classifier-QXsPUAF4">
+<h2>Bringing <code>classify</code> into the <code>classifier</code></h2>
+
+<p>With a few changes, the variable <code>first</code> doesn't have to be reassigned though. Initially is meant to reflect the likelihood of a difficulty appearing as is proportional to other difficulties. Later, it is multiplied by the likelihood of a chord existing in a song of a given difficulty.</p>
+
+<p>What if instead of reassigning that variable, we introduced a <code>likelihoods</code> array that would capture all of the values we need to multiply together, and then we multiply them?</p>
+
+<pre data-type="programlisting">
+function classify(chords){
+&nbsp; const smoothing = 1.01;
+&nbsp; const classified = new Map();
+&nbsp; classifier.labelProbabilities.forEach(function(_probabilities, difficulty){
+&nbsp;&nbsp;&nbsp; const likelihoods = [classifier.labelProbabilities.get(difficulty) + smoothing];
+&nbsp;&nbsp;&nbsp; chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel = classifier.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; likelihoods.push(probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; })
+&nbsp;&nbsp;&nbsp; const totalLikelihood = likelihoods.reduce(function(total, index) {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * index;
+&nbsp;&nbsp;&nbsp; });
+&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp; });
+&nbsp; return classified;
+};
+</pre>
+
+<p>We've mentioned, but haven't gone in depth on the <code>reduce</code> function before this point. It allows us to step through an array and apply some function to it, while working with a returned value, along with each element.</p>
+
+<p>But wait! We already have an array that we're looping through (<code>chords</code>). Why would we create a new one to step through? Do we really need to loop twice? Once to accumulate and once to multiply? Let's try using <code>reduce</code> on that <code>forEach</code> instead:</p>
+
+<pre data-type="programlisting">
+function classify(chords){
+&nbsp; const smoothing = 1.01;
+&nbsp; const classified = new Map();
+&nbsp; classifier.labelProbabilities.forEach(function(_probabilities, difficulty){
+
+//reduce starts
+&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce(function(total, chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel = classifier.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; }, classifier.labelProbabilities.get(difficulty) + smoothing)
+//reduce ends
+
+&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp; });
+&nbsp; return classified;
+};
+</pre>
+
+<p>This is a bit more complex for two reasons. First, our initial likelihood is now at the end, just above this line: <code>//reduce ends</code>. This supplies the "initial value" to the <code>reduce</code> total. Second, our <code>else</code> branch of our <code>if</code> statement is back. The reason is that on every step through the <code>reduce</code> function, if nothing is returned (which would be the case if the <code>if</code> condition was false and we had no <code>else</code> branch), then <code>undefined</code> would be returned. Returning the <code>total</code> has the same effect as just moving onto the next element.</p>
+
+<p>If that's confusing, think of it this way: Say you had a <code>reduce</code> function like this:</p>
+
+<pre data-type="programlisting">
+[2, 3, 4].reduce(function(result, element){ return result }, 10)</pre>
+
+<p>This function would simply return <code>10</code>. If no value was supplied as the second parameter (if the <code>, 10</code> was not there), it would return the first element: <code>2</code>. This is because <code>result</code> is fed back into the function for each element. Contrast this with another simple use of reduce which sums the values of an array:</p>
+
+<pre data-type="programlisting">
+[2, 3, 4].reduce(function(result, element){return result + element })</pre>
+
+<p>This will return <code>9</code>. If it had an initial element of <code>10</code>, it would add that as well, returning <code>19</code>.</p>
+
+<p>Back to our example, one pattern that is especially common in JavaScript is to allow unmet conditions to return something outside of an else. For example:</p>
+
+<pre data-type="programlisting">
+if(probabilityOfChordInLabel){
+  return total * (probabilityOfChordInLabel + smoothing)
+}
+return total;
+</pre>
+
+<p>It's true that if the true branch of the <code>if</code> statement isn't executed, the code will continue beyond it. But personally, I feel this style invites mismatched return types and often visually priviledges the less likely possibilities at the top of a function. Moreover, it less strongly signals two code paths, which if only slightly, disguises the complexity of the code. For someone who is interested in refactoring and consequently, eliminating complexity, it can mask places that may be good candidates for changes.</p>
+
+<p>In any case, you will frequently see this style used for error handling like this:</p>
+
+<pre data-type="programlisting">
+function callback(error, response){ 
+  if(error){
+    return new Error(error);
+  }
+  //do something with the response
+}</pre>
+
+<p>We can pick on the <code>classify</code> function a bit more. First of all, we should have no issue with tying it more closely with the <code>classifier</code> object. If there's one obvious thing that a classifier does, it's classifying.</p>
+
+<p>To that end, let's update our <code>classifier</code> to have the <code>classify</code> function as a property.</p>
+
+<pre data-type="programlisting">
+const classifier = {
+&nbsp; songs: [],
+&nbsp; allChords: new Set(),
+&nbsp; labelCounts: new Map(),
+&nbsp; labelProbabilities: new Map(),
+&nbsp; chordCountsInLabels: new Map(),
+&nbsp; probabilityOfChordsInLabels: new Map(),
+&nbsp; classify: function(chords){
+&nbsp;&nbsp;&nbsp; const smoothing = 1.01;
+&nbsp;&nbsp;&nbsp; const classified = new Map();
+&nbsp;&nbsp;&nbsp; classifier.labelProbabilities.forEach(function(_probabilities, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce(function(total, chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel = classifier.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }, classifier.labelProbabilities.get(difficulty) + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp;&nbsp;&nbsp; });
+&nbsp;&nbsp;&nbsp; return classified;
+&nbsp; }
+};
+</pre>
+
+<p>Our tests will break at this point, because we need to replace instances of <code>classify</code> with <code>classifier.classify</code> in the tests. Change these lines:</p>
+
+<pre data-type="programlisting">
+const classified = classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+...
+const classified = classify(['d', 'g', 'e', 'dm']);
+</pre>
+
+<p>to this:</p>
+
+<pre data-type="programlisting">
+const classified = classifier.classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+...
+const classified = classifier.classify(['d', 'g', 'e', 'dm']);
+</pre>
+
+<p>Now that our tests are working again (save/test/commit), we still have some work to do with this function. It awkwardly refers to itself in the 3rd person in a sense. Rather than using <code>this</code>, it says it's own name: <code>classifier</code>. There are three instances of this. Let's change those, making the function the following:</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; const smoothing = 1.01;
+&nbsp; const classified = new Map();
+&nbsp; this.labelProbabilities.forEach(function(_probabilities, 
+                                           difficulty){
+&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce(function(total, chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel = 
+        this.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; }, this.labelProbabilities.get(difficulty) + smoothing)
+&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp; });
+&nbsp; return classified;
+}
+</pre>
+
+<p>The first instance of <code>this</code> will be fine, but the second and third will cause problems.</p>
+
+<pre data-type="programlisting">
+const probabilityOfChordInLabel = 
+  this.probabilityOfChordsInLabels.get(difficulty)[chord]
+//and
+}, this.labelProbabilities.get(difficulty) + smoothing)
+</pre>
+
+<p>This is because our <code>this</code> (implicit parameter) is set in the context of the function that these statements are within. The most common and oafish fix is this:</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; const smoothing = 1.01;
+&nbsp; const classified = new Map();
+&nbsp; const self = this;
+&nbsp; this.labelProbabilities.forEach(function(_probabilities, 
+                                           difficulty){
+&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce(function(total, chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel = 
+        self.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }, self.labelProbabilities.get(difficulty) + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp;&nbsp;&nbsp; });
+&nbsp;&nbsp;&nbsp; return classified;
+&nbsp; }
+</pre>
+
+<p>By setting a <code>self</code> variable (in Chapter 5, we used "<code>that</code>" instead), you can ensure you have access to the object you want, even within the inner functions. In Chapter 5, we learned about using <code>call</code>, <code>apply</code>, or <code>bind</code> to accomplish the same thing with a bit more elegance. In this case, since we are not <em>calling</em> these anonymous functions directly, only declaring them to be called by <code>forEach</code> and <code>reduce</code>, we cannot use <code>call</code> or <code>apply</code> to set the implicit argument, <code>this</code>. For this case, we must use <code>bind</code> or find another way.</p>
+
+<p>As for <code>forEach</code>, we can rely on the ability of that function to accept a <em>thisArg</em>, as a parameter. This allows us to set what we want <code>this</code> to be in the anonymous function.</p>
+
+<pre data-type="programlisting">
+this.labelProbabilities.forEach(function(_probabilities, difficulty){
+&nbsp; const totalLikelihood = chords.reduce(function(total, chord){
+&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel = 
+      self.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }, this.labelProbabilities.get(difficulty) + smoothing)
+&nbsp; classified.set(difficulty, totalLikelihood);
+}, this);
+</pre>
+
+<p>Now that we have added <code>this</code> as a second parameter to <code>forEach</code> (on the last line), we are free to use <code>this</code> rather than <code>self</code> on the third from last line. But the remaining call to <code>self</code> cannot yet be changed to <code>this</code>, because its value is wrapped by the anonymous function inside of <code>reduce</code>.</p>
+
+<p>One could reasonably expect that the function signature for <code>reduce</code>'s callback would also allow a "thisArg" to be accepted as an optional parameter. Unfortunately, this is not the case, so in this style, the <code>this</code> inside of that function must be set with <code>bind</code>.</p>
+
+<pre data-type="programlisting">
+this.labelProbabilities.forEach(function(_probabilities,
+                                         difficulty){
+&nbsp; const totalLikelihood = chords.reduce(function(total, chord){
+&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel = 
+      this.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }.bind(this), this.labelProbabilities.get(difficulty) + smoothing)
+&nbsp; classified.set(difficulty, totalLikelihood);
+}, this);
+</pre>
+
+<p>Notice the third line from the bottom is where the <code>bind</code> function is called. It is what allows, on the fifth line from the top, for us to now use <code>this</code>, instead of <code>self</code>. Now our classify function looks like this:</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; const smoothing = 1.01;
+&nbsp; const classified = new Map();
+&nbsp; this.labelProbabilities.forEach(function(_probabilities,
+                                           difficulty){
+&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce(function(total, chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel =
+        this.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; }.bind(this), this.labelProbabilities.get(difficulty) +
+      smoothing)
+&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp; }, this);
+&nbsp; return classified;
+}
+</pre>
+
+<p>But before we leave this example, there is another tool we can use to deal with passing our <code>this</code> through: arrow functions. Through them, our function can be simplified like this:</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; const smoothing = 1.01;
+&nbsp; const classified = new Map();
+&nbsp; this.labelProbabilities.forEach((_probabilities, difficulty) =&gt; {
+&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce((total, chord) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel =
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; }, this.labelProbabilities.get(difficulty) +
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;smoothing)
+&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp; });
+&nbsp; return classified;
+}
+</pre>
+
+<p>We can get rid of our <code>this</code> as a second paramter to <code>forEach</code> and our <code>bind(this)</code> in <code>reduce</code>. The arrow functions are in the following lines:</p>
+
+<pre data-type="programlisting">
+&nbsp; this.labelProbabilities.forEach((_probabilities, difficulty) =&gt; {
+&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce((total, chord) =&gt; {</pre>
+
+<p>The parts with <code>=&gt;</code> are what them arrow functions. Its syntax might seem a little weird (and it has a lot of variation), but what's great is the <code>this</code> passes through from the outer function.</p>
+
+<p>To simplify this function a bit further, <code>smoothing</code> can be taken out of the function and added as a new attribute of the <code>classifier</code>:</p>
+
+<pre data-type="programlisting">
+smoothing: 1.01,
+classify: function(chords){
+&nbsp; const classified = new Map();
+&nbsp; this.labelProbabilities.forEach((_probabilities, difficulty) =&gt; {
+&nbsp;&nbsp;&nbsp; const totalLikelihood = chords.reduce((total, chord) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const probabilityOfChordInLabel =
+        this.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + this.smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; }, this.labelProbabilities.get(difficulty) + this.smoothing)
+&nbsp;&nbsp;&nbsp; classified.set(difficulty, totalLikelihood);
+&nbsp; });
+&nbsp; return classified;
+}
+</pre>
+
+<p>On the one hand, this is nice because it gets <code>smoothing</code> out of our function. However, it does increase the scope of where it is available and necessitates adding <code>this.</code> to precede it inside of the function. Extracting this <code>const</code> to an attribute also makes it assignable again. Unfotunately, to get something like a <code>const</code> inside of our <code>classifier</code> object literal takes a bit of work. There is a <code>defineProperty</code> function that we can use to define attributes that are not only not writable, but even immutable by default. We won't go into depth, but <code>defineProperty</code> is a good tool to look into if you want a lot of control over how properties are used.</p>
+
+<p>Normally, <code>defineProperty</code> would be called <em>after</em> the object is created, which would add complexity to our execution at some point, and move the attribute's creation to some other physical place in the file. On the other hand, we could just call this inside of the <code>classify</code> function like this:</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; Object.defineProperty(this, 'smoothing', {value: 1.01});
+</pre>
+
+<p>But that puts complexity back into our function, which is what we were trying to avoid by making it an object to begin with. Later, we'll discuss alternatives to creating objects with object literals which could give us more control over our properties as the objects are created, but for now, let's revert this change and allow <code>smoothing</code> to be an attribute as it was.</p>
+
+<p>Another change we can make to the <code>classify</code> function is to inline the classified variable by using the <code>map</code> function instead of <code>forEach</code>. Whenever you find yourself setting up a container (usually an array, but in our case a <code>Map</code> object), using a loop of some kind to change that variable, and then returning the variable, you may be better served by using a <code>map</code> function rather than a loop.</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; const classified = new Map();
+&nbsp; Array.from(this.labelProbabilities.entries()).map((labelWithProbability) =&gt;{
+&nbsp;&nbsp;&nbsp; const difficulty = labelWithProbability[0];
+...
+&nbsp; return classified;
+}
+</pre>
+
+<p>Unfortunately, the <code>Map</code> <em>object</em> doesn't have a <code>map</code> <em>function</em> (Yes, it bums me out, too). So our first step involves pulling an array out of the entries in the <code>Map</code> so that we can use <code>map</code> through it. The second change is that we end up with a slightly less convenient object, so we set a new const: <code>difficulty</code>.</p>
+
+<p>Now we can almost get rid of our classified variable. Instead of initializing it, updating it in the loop and returning it after, we can have <code>map</code> return a multidimensional array to set the <code>Map</code>:</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; const classified = new Map(Array.from(
+    this.labelProbabilities.entries()).map((labelWithProbability) =&gt; {
+&nbsp;&nbsp;&nbsp;   const difficulty = labelWithProbability[0];
+&nbsp;&nbsp;&nbsp;   const totalLikelihood = chords.reduce((total, chord) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   const probabilityOfChordInLabel = 
+          this.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  &nbsp; return total * (probabilityOfChordInLabel + this.smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  &nbsp;&nbsp; return total;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   }
+&nbsp;&nbsp;&nbsp; }, this.labelProbabilities.get(difficulty)
+      + this.smoothing)
+&nbsp;&nbsp;&nbsp; return [difficulty, totalLikelihood];
+&nbsp; }));
+&nbsp; return classified;
+}
+</pre>
+
+<p>The second line now includes directly assigning a <code>new Map</code> object to <code>classified</code>. Additionally, our <code>return</code>, 5 lines from the bottom, now returns an array with <code>difficulty</code> and <code>totalLikelihood</code>. The last (very minor) change to notice is that three lines from the bottom of this sample, we now have an extra closing parentheses in the line:</p>
+
+<pre data-type="programlisting">
+})); // just above "return classified;"
+</pre>
+
+<p>And now we're ready to get rid of the <code>classified</code> variable. Simply delete the line with the last return statement and instead return the result of the call to the <code>new Map</code> constructor:</p>
+
+<pre data-type="programlisting">
+classify: function(chords){
+&nbsp; return new Map(Array.from(
+    this.labelProbabilities.entries()).map((labelWithProbability) =&gt; {
+...
+&nbsp; }));
+}
+</pre>
+
+<p>We now have a similar unnecessary variable in <code>totalLikelihood</code>:</p>
+
+<pre data-type="programlisting">
+const totalLikelihood = chords.reduce((total, chord) =&gt; {
+  const probabilityOfChordInLabel = 
+    this.probabilityOfChordsInLabels.get(difficulty)[chord]
+&nbsp; if(probabilityOfChordInLabel){
+&nbsp;&nbsp;&nbsp; return total * (probabilityOfChordInLabel + this.smoothing)
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return total;
+&nbsp; }
+}, this.labelProbabilities.get(difficulty) + this.smoothing)
+return [difficulty, totalLikelihood];
+</pre>
+
+<p>Instead of assigning a variable to the result of the <code>reduce</code> call, and returning it in the array, we can inline that and return the array directly:</p>
+
+<pre data-type="programlisting">
+return [difficulty,
+&nbsp; chords.reduce((total, chord) =&gt; {
+  &nbsp; const probabilityOfChordInLabel =
+      this.probabilityOfChordsInLabels.get(difficulty)[chord]
+  &nbsp; if(probabilityOfChordInLabel){
+&nbsp;  &nbsp;&nbsp; return total * (probabilityOfChordInLabel + this.smoothing)
+&nbsp;   }else{
+&nbsp;&nbsp;  &nbsp; return total;
+&nbsp;   }
+  }, this.labelProbabilities.get(difficulty) + this.smoothing)
+]
+</pre>
+
+<p>This might look confusing, but you're still just returning a two element array. The first element is <code>difficulty</code>, and the second is the result of the <code>reduce</code> call.</p>
+
+<p>If we want to simplify further, we can extract a function to eliminate our assignment and our conditional inside of this code:</p>
+
+<pre data-type="programlisting">
+const probabilityOfChordInLabel = 
+  this.probabilityOfChordsInLabels.get(difficulty)[chord]
+if(probabilityOfChordInLabel){
+&nbsp; return total * (probabilityOfChordInLabel + this.smoothing)
+}else{
+&nbsp; return total;
+}
+</pre>
+
+<p>We have to delete that assignment, and replace the other two references (one in the conditional's test and one in the conditional's <code>if</code> branch) with the right hand side of the assignment. That should leave us with this:</p>
+
+<pre class="pre" data-type="programlisting">
+if(this.probabilityOfChordsInLabels.get(difficulty)[chord]){
+&nbsp; return total * 
+  (this.probabilityOfChordsInLabels.get(
+    difficulty)[chord] + this.smoothing)
+}else{
+&nbsp; return total;
+}
+</pre>
+
+<p>Next, we extract a function to completely replace those lines with this:</p>
+
+<pre data-type="programlisting">
+return total * this.valueForChordDifficulty(difficulty, chord);
+</pre>
+
+<p>And we can add a new function above <code>classify</code>:</p>
+
+<pre data-type="programlisting">
+valueForChordDifficulty(difficulty, chord){
+&nbsp; if(this.probabilityOfChordsInLabels.get(difficulty)[chord]){
+&nbsp;&nbsp;&nbsp; return this.probabilityOfChordsInLabels.get(difficulty)[chord] +
+      this.smoothing
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 1;
+&nbsp; }
+},
+</pre>
+
+<p>That function will produce a value to multiply by the running total. If we want a slightly denser syntax for that function, we can use the ternary syntax:</p>
+
+<pre data-type="programlisting">
+valueForChordDifficulty(difficulty, chord){
+&nbsp; const value = 
+    this.probabilityOfChordsInLabels.get(difficulty)[chord];
+&nbsp; return value ? value + this.smoothing : 1;
+},
+</pre>
+
+<p>Note that this would also work as the first line:</p>
+
+<pre data-type="programlisting">
+valueForChordDifficulty: function(difficulty, chord){</pre>
+
+<p>&nbsp;</p>
+
+<aside data-type="sidebar" id="density-and-abstraction-JDCpmfMUYF7">
+<h5>Density and Abstraction</h5>
+
+<p>At this point, you might be wondering if this refactoring is really worth it. By inlining variables, we've made the code more dense. We also have some overhead to using <code>map</code> with a <code>Map</code> object. For some people, inlining variables and using functions like <code>bind</code> is going to make the code harder to read. It's important to be aware of how your style might impact other members of your team.</p>
+
+<p>So did we just make the code worse? Not necessarily. The advantage of inlining variables is twofold. First, less internal state means less to keep track of. Second, <em>inlining</em> variables can make it easier to <em>extract</em> functions, which are more flexible and testable than simple variables.</p>
+
+<p>For both variables and functions, the important part is to be aware of inlining and extracting as choices.&nbsp;</p>
+</aside>
+
+<div data-type="note" id="code-has-no-final-perfect-refactored-state-9VubNt6UgFk"><h6>Note</h6>
+<h1>Code Has No Final, Perfect, "Refactored" State</h1>
+
+<p>One important thing to note about our work on the <code>classify</code> function is that there is no way to tell when you are "done" refactoring. Some refactorings (like inlining and extracting) are inverse processes, so you could end up undoing previous refactoring work with subsequent efforts. You could create an infinite loop of refactoring just due to that fact. Mix in others' opinions of what "good" code is, and you really can "improve" the code forever. This is part of why its important to develop your own standards of quality, and to calibrate those with the teams you work with.</p>
+</div>
+</section>
+
+<section data-type="sect2" id="untangling-coupled-values-RXs3cJFO">
+<h2>Untangling Coupled Values</h2>
+
+<p>Moving on from our <code>classify</code> function, we have a problem in the code that needs to be addressed. You'll see something interesting if you add logging statements to the tests (after <code>trainAll();</code>) like the following:</p>
+
+<pre data-type="programlisting">
+console.log(classifier.probabilityOfChordsInLabels);
+console.log(classifier.chordCountsInLabels);
+</pre>
+
+<p>They have the same values. Not only that, they actually are referencing the same <code>Set</code> object.</p>
+
+<p>The reason for this is in the <code>setProbabilityOfChordsInLabels</code> function: specifically, the second line.</p>
+
+<pre data-type="programlisting">
+function setProbabilityOfChordsInLabels(){
+&nbsp; classifier.probabilityOfChordsInLabels = 
+    classifier.chordCountsInLabels;
+&nbsp; classifier.probabilityOfChordsInLabels.forEach(
+    function(_chords, difficulty){
+&nbsp;&nbsp;&nbsp;   Object.keys(classifier.probabilityOfChordsInLabels.get(
+        difficulty)).forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.probabilityOfChordsInLabels.get(
+        difficulty)[chord] /=&nbsp; classifier.songs.length;
+&nbsp;&nbsp;&nbsp; })
+&nbsp; })
+}
+</pre>
+
+<p>The problem is that when we assign one set to another, we aren't just copying the values from the <code>Set</code> on the right hand side of the assignment into the <code>Set</code> on the left hand side. Both <code>classifier.probabilityOfChordsInLabels</code> and <code>classifier.chordCountsInLabels</code> are just fingers pointing at the same object. If you change the values by referencing either name, both will be affected.</p>
+
+<p>Here is a short example to demonstrate this:</p>
+
+<pre data-type="programlisting">
+x = {a: 2};
+// returns { a: 2 }
+y = x;
+// returns { a: 2 }
+x['b'] = 3;
+// returns 3
+y;
+//returns { a: 2, b: 3 }
+y['c'] = 5;
+// returns 5
+x;
+// returns { a: 2, b: 3, c: 5 }
+</pre>
+
+<p>However, these all involve what happens when you <em>update</em> an object. If you reassign the object again, it will not change both labels to be pointing at the new object:</p>
+
+<pre data-type="programlisting">
+x = {a: 2};
+// returns { a: 2 }
+y = x;
+// returns { a: 2 }
+x = {b: 5};
+console.log(y);
+// prints { a: 2 }
+// because it still ponts at the original object
+</pre>
+
+<p>Back to our code, if <code>probabilityOfChordsInLabels</code> and <code>chordCountsInLabels</code> do the same thing, we can just replace references of the former with the latter:</p>
+
+<pre data-type="programlisting">
+function setProbabilityOfChordsInLabels(){
+&nbsp; classifier.chordCountsInLabels = classifier.chordCountsInLabels;
+&nbsp; classifier.chordCountsInLabels.forEach(
+    function(_chords, difficulty){
+&nbsp;&nbsp;&nbsp; Object.keys(classifier.chordCountsInLabels.get(difficulty))
+      .forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.get(
+        difficulty)[chord] /=&nbsp; classifier.songs.length;
+&nbsp;&nbsp;&nbsp; })
+&nbsp; })
+}
+</pre>
+
+<p>Now line two is looking more obviously redundant, which is great, because we know we can delete it.</p>
+
+<pre data-type="programlisting">
+function setProbabilityOfChordsInLabels(){
+&nbsp; classifier.chordCountsInLabels.forEach(
+    function(_chords, difficulty){
+&nbsp;&nbsp;&nbsp; Object.keys(classifier.chordCountsInLabels.get(difficulty))
+      .forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.get(
+        difficulty)[chord] /=&nbsp; classifier.songs.length;
+&nbsp;&nbsp;&nbsp; })
+&nbsp; })
+}
+</pre>
+
+<p>We also have two more references to <code>probabilityOfChordsInLabels</code> to change inside of <code>classifier</code>:</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+const value = 
+this.probabilityOfChordsInLabels.get(difficulty)[chord];</pre>
+
+<p>The assignment to <code>value</code> (inside of the <code>valueForChordDifficulty</code> function of <code>classifier</code>) should be updated to use <code>chordCountsInLabels</code> instead.</p>
+
+<p>This leaves us with the following:</p>
+
+<pre class="drop-out-of-bounds drop-out-of-bounds-bottom drop-element-attached-top drop-element-attached-center drop-target-attached-bottom drop-target-attached-center" data-type="programlisting">
+const classifier = {
+...
+const value = this.chordCountsInLabels.get(difficulty)[chord];</pre>
+
+<p>And tests should be passing at this point. In some cases, the correct refactoring here would be truly <em>copy</em> the <code>Set</code> into a new one when necessary. Then, both sets would be independent objects. We don't actually need two objects, so we'll try a different approach here.</p>
+
+<aside data-type="sidebar" id="copying-objects-zqCLf7cbFl">
+<h5>"Copying" Objects</h5>
+
+<p>If you're interested in copying objects in JavaScript, look into the terms "deep copy" vs. "shallow copy," as well as "cloning" and the <code>Object</code> functions for <code>freeze</code>/<code>assign</code>/<code>seal</code>. They might do what you want. Or maybe you want a new object tied to the old one's prototype with <code>Object.create</code>. Maybe you want a totally new object with <code>Object.assign</code>. Maybe you want a constructor function or a class? Maybe you just want a factory function (see Chapter 8). Maybe you want a new <em>and</em> immutable container for your data.</p>
+
+<p>By the way, two things to note about <code>Object.create</code>. First, it doesn't own the properties from the prototype object (its first parameter), so they could possibly be overwritten. Second, it only "copies" enumerable properties, so don't expect it to copy <em>everything</em>.</p>
+
+<p>There are about a million and five ways to do inheritance and copying objects in JavaScript. That makes it hard to pick one. The point here is to remember that assigning with <code>=</code> is NOT one of them.</p>
+</aside>
+
+<p>Since the last code sample contains our only reference to the value of the new object, now we have a variable that changes.</p>
+
+<p>&nbsp;</p>
+
+<p>maybe we don't need to update the object at all. Let's try using a function as an attribute, instead of a <code>Set</code> that stores all of the values.</p>
+
+<p>First, let's move the <code>setProbabilityOfChordsInLabels</code> function into the <code>classifier</code> object:</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+&nbsp; setProbabilityOfChordsInLabels: function (){
+&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.forEach(
+      function(_chords, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Object.keys(classifier.chordCountsInLabels.get(difficulty))
+        .forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.get(
+          difficulty)[chord] /=&nbsp; classifier.songs.length;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; })
+&nbsp;&nbsp;&nbsp; })
+&nbsp; },
+&nbsp; valueForChordDifficulty: function(difficulty, chord){
+...
+</pre>
+
+<p>And we'll also need to update our <code>setLabelsAndProbabilities</code> function to use <code>classifier.</code> ahead of the function call:</p>
+
+<pre data-type="programlisting">
+function setLabelsAndProbabilities(){
+&nbsp; setLabelProbabilities();
+&nbsp; setChordCountsInLabels();
+&nbsp; classifier.setProbabilityOfChordsInLabels();
+};
+</pre>
+
+<p>Running the test suite shows everything is working properly. Now let's replace the references to <code>classifier</code> with <code>this</code>.</p>
+
+<pre data-type="programlisting">
+&nbsp; setProbabilityOfChordsInLabels: function (){
+&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.forEach(
+      function(_chords, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Object.keys(this.chordCountsInLabels.get(difficulty))
+        .forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.get(
+          difficulty)[chord] /= this.songs.length;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }, this)
+&nbsp;&nbsp;&nbsp; }, this)
+&nbsp; },
+</pre>
+
+<p>Recall that in addition to replacing <code>classifier</code> with <code>this</code>, we also need to pass <code>this</code> in as the optional second argument to both <code>forEach</code> calls. Otherwise, our <code>this</code> context would get lost. From earlier, we know that we could accomplish the same thing with arrow functions, but we'll actually be removing this function now.</p>
+
+<p>Now we get to the crux of the problem: we don't really want functions that set values through side effects. We want functions that return values. They are much easier to work with and keep track of. We won't get all the way there in this chapter, and arguably, OOP fights that ethos, whereas FP encourages it (see Chapter 11).</p>
+
+<p>As for <code>setProbabilityOfChordsInLabels</code>, all that looping amounts to very little. Really, all we want to do is divide the number of times the chord appears in a given difficulty by the number of songs. You can delete the&nbsp;<code>setProbabilityOfChordsInLabels</code> function from the object as well as its call. In its place, we'll be using a simple function to check a given chord and difficulty combo. Update your classifier object so that it looks like this:</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+&nbsp; likelihoodFromChord: function(difficulty, chord){
+&nbsp;&nbsp;&nbsp; return this.chordCountsInLabels
+      .get(difficulty)[chord] / this.songs.length;
+&nbsp; },
+&nbsp; valueForChordDifficulty: function(difficulty, chord){
+&nbsp;&nbsp;&nbsp; const value = this.likelihoodFromChord(difficulty, chord);
+
+</pre>
+
+<p>The <code>likelihoodFromChord</code> function and its call on the last line are both new. Make sure to delete the call to&nbsp;<code>setProbabilityOfChordsInLabels</code> from setLabelsAndProbabilities function as well. It should look like this:</p>
+
+<pre data-type="programlisting">
+function setLabelsAndProbabilities(){
+&nbsp; setLabelProbabilities();
+&nbsp; setChordCountsInLabels();
+};
+</pre>
+
+<p>With these changes, we've simplified the code and stopped reassignments to <code>likelihoodFromChord</code>.</p>
+
+<aside data-type="sidebar" id="about-reassigning-variables-wqCaS6cnF3">
+<h5>About Reassigning Variables</h5>
+
+<p>Among the most important developments recently happening in JavaScript and beyond is the increased importance of functional programming. We'll explore the benefits more in Chapter 11, but one of the best things about it is how it allows for values to be easily trusted.</p>
+
+<p>On the other end of the spectrum, is reassigning values. Nothing makes a program harder to debug, write features for, refactor, or understand, than very long functions that assign and reassign to variables throughout.</p>
+
+<p>If there's one thing that everyone could <strong>stop</strong> doing to benefit their code, it would be reassigning variables.</p>
+
+<p>Updating values (adding/deleting/changing elements in an object or an array for instance) can be just as bad, and is best done as a one-step operation behind a function and assigning to a new variable when possible. Overall, making the scope of <em>most</em> variables small should be a priority.</p>
+
+<p>Something to consider is the idea that OOP encourages reassigning variables by having objects that stick around and allow properties to be changed.</p>
+</aside>
+</section>
+
+<p>At this point, all the tests should be working. Just to recap what happened in this section, we had two variable names that were assigned to the same object. First, we changed all the instances of the second variable name to be the first variable name, leaving us with a variable that was updated. Then, instead of relying on the updates to that variable, we changed references to it to use a calculation to get the information (instead of just accessing where the information was stored).</p>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="objects-with-duplicate-information-7MsVtoFg">
+<h2>Objects With Duplicate Information</h2>
+
+<p>In the last section, we dealt with two references to an object that updated. Now, we'll deal with two independent objects that are a bit too similar. <code>classifier.songs</code> and <code>songList.songs</code> seem to have very almost identical data. Really, the only difference is the extra property (<code>name</code>) in the <code>songList.songs</code>. Let's get rid of <code>classifier</code>'s <code>song</code> property.</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+likelihoodFromChord: function(difficulty, chord){
+&nbsp; return this.chordCountsInLabels
+    .get(difficulty)[chord] / songList.songs.length;
+},
+</pre>
+
+<p>We need to make two changes to classifier. Delete the <code>songs</code> attribute and changing <code>this</code> to <code>songList</code> in the <code>likelihoodFromChord</code> function.</p>
+
+<p>Next, we have to delete the second line of our <code>train</code> function:</p>
+
+<pre data-type="programlisting">
+function train(chords, label){
+&nbsp; classifier.songs.push({label: label, chords: chords}); //this one
+</pre>
+
+<p><code>setLabelProbabilities</code> should use <code>songList.songs.length</code> instead of <code>classifier.songs.length</code></p>
+
+<pre data-type="programlisting">
+function setLabelProbabilities(){
+&nbsp; classifier.labelCounts.forEach(function(_count, label){
+&nbsp;&nbsp;&nbsp; classifier.labelProbabilities.set(label, 
+      classifier.labelCounts.get(label) / songList.songs.length);
+&nbsp; })
+};
+</pre>
+
+<p>Last up, our <code>setChordCountsInLabels</code> function needs to be changed to use <code>songList.songs</code> instead of <code>classifier.songs</code>, and also to use <code>song.difficulty</code>, rather than <code>song.label</code>.</p>
+
+<pre data-type="programlisting">
+function setChordCountsInLabels(){
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; if(classifier.chordCountsInLabels
+      .get(song.difficulty) === undefined){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.set(song.difficulty, {})
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(classifier.chordCountsInLabels
+        .get(song.difficulty)[chord] &gt; 0){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels
+          .get(song.difficulty)[chord] += 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels
+          .get(song.difficulty)[chord] = 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; });
+&nbsp; });
+}
+</pre>
+
+<p>At this point, the tests all work.</p>
+</section>
+
+<section data-type="sect2" id="bringing-the-other-functions-and-variables-into-classifier-PXs8u6FX">
+<h1>Bringing the Other Functions and Variables into <code>classifier</code></h1>
+
+<p>Now, let's move <code>chordCountsInLabels</code> into our <code>classifier</code> object:</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+&nbsp; setChordCountsInLabels: function(){
+&nbsp;&nbsp;&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(classifier.chordCountsInLabels
+        .get(song.difficulty) === undefined){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.set(song.difficulty, {})
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(classifier.chordCountsInLabels
+          .get(song.difficulty)[chord] &gt; 0){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.get(song.difficulty)[chord] += 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; classifier.chordCountsInLabels.get(song.difficulty)[chord] = 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; });
+&nbsp;&nbsp;&nbsp; });
+&nbsp; },
+...
+</pre>
+
+<p>&nbsp;</p>
+
+<p>And then we need to change the call in <code>setLabelsAndProbabilities</code> to reference it through the <code>classifier</code>:</p>
+
+<pre data-type="programlisting">
+function setLabelsAndProbabilities(){
+&nbsp; setLabelProbabilities();
+&nbsp; classifier.setChordCountsInLabels();
+};
+</pre>
+
+<p>Next, we "thisify" the function by changing references to <code>classifier</code> to <code>this</code> and adding the "thisArg" to the <code>forEach</code> functions.</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+&nbsp; setChordCountsInLabels: function(){
+&nbsp;&nbsp;&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(this.chordCountsInLabels
+        .get(song.difficulty) === undefined){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.set(song.difficulty, {})
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(this.chordCountsInLabels
+          .get(song.difficulty)[chord] &gt; 0){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.get(song.difficulty)[chord] += 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.get(song.difficulty)[chord] = 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }, this);
+&nbsp;&nbsp;&nbsp; }, this);
+&nbsp; },
+</pre>
+
+<p>All the tests still pass. Next, as with turning our <code>likelihoodFromChord</code> into a query rather than setting and later retreiving the values from the&nbsp;<code>probabilityOfChordsInLabels</code> map, we can do the same thing to eliminate the <code>chordCountsInLabels</code> map.</p>
+
+<p>Taking a look again at the <code>setChordCountsInLabels</code> function, it loops through each chord in each song, and adds 1 for every instance of the chord:</p>
+
+<pre data-type="programlisting">
+setChordCountsInLabels: function(){
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; if(this.chordCountsInLabels.get(song.difficulty) === undefined){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.set(song.difficulty, {})
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(this.chordCountsInLabels.get(song.difficulty)[chord] &gt; 0){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.get(song.difficulty)[chord] += 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.chordCountsInLabels.get(song.difficulty)[chord] = 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; }, this);
+&nbsp; }, this);
+},
+</pre>
+
+<p>If all we have to do is determine the count that a chord appears in a given difficulty, we can set up similar loops, a counter, and just add 1 when there is a match. Add this after <code>setChordCountsInLabels</code> in the <code>classify</code> object:</p>
+
+<pre data-type="programlisting">
+chordCountForDifficulty: function(difficulty, test_chord){
+&nbsp; let counter = 0;
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; if(song.difficulty === difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(chord===test_chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter = counter + 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; });
+&nbsp;&nbsp;&nbsp; }
+&nbsp; });
+&nbsp; return counter;
+},
+</pre>
+
+<p>Now we can use that function instead of setting and retreiving the chord counts. Note that we don't need thisArgs for our <code>forEach</code> functions because we don't have any references to <code>this</code> anymore.</p>
+
+<p>We need a few additional changes. First, the <code>likelihoodFromChord</code> function can be changed to:</p>
+
+<pre data-type="programlisting">
+likelihoodFromChord: function(difficulty, chord){
+&nbsp; return this.chordCountForDifficulty(difficulty, chord) / songList.songs.length;
+},
+</pre>
+
+<p>Next, we can delete our <code>setChordCountsInLabels</code> function from <code>classifier</code>, as well as the call to it in <code>setLabelsAndProbabilities</code> :</p>
+
+<pre data-type="programlisting">
+function setLabelsAndProbabilities(){
+  setLabelProbabilities();
+&nbsp; classifier.setChordCountsInLabels();
+};
+</pre>
+
+<p>After getting rid of the third line in that function, we're left with:</p>
+
+<pre data-type="programlisting">
+function setLabelsAndProbabilities(){
+&nbsp; setLabelProbabilities();
+};
+</pre>
+
+<p>This function now only exists to call another function. That means we can delete <code>setLabelsAndProbabilities</code> and change its call to just call <code>setLabelProbabilities</code>, which happens inside of the <code>trainAll</code> function. Change this:</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; train(song.chords, song.difficulty);
+&nbsp; });
+&nbsp; setLabelsAndProbabilities();
+};
+</pre>
+
+<p>To this:</p>
+
+<pre data-type="programlisting">
+function trainAll(){
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; train(song.chords, song.difficulty);
+&nbsp; });
+&nbsp; setLabelProbabilities();
+};
+</pre>
+
+<p>All the tests still pass. Before moving on to another function, we should have another look at the <code>chordCountForDifficulty</code> function:</p>
+
+<pre data-type="programlisting">
+chordCountForDifficulty: function(difficulty, testChord){
+&nbsp; let counter = 0;
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; if(song.difficulty === difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(chord === testChord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter = counter + 1;
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; });
+&nbsp;&nbsp;&nbsp; }
+&nbsp; });
+&nbsp; return counter;
+},
+</pre>
+
+<p>As we did in the <code>classify</code> function, when we have code that uses a loop to apply some function to a collection, while altering a variable throughout, it is a good candidate for <code>reduce</code>. By the way, notice that we used <code>let</code> here, rather than <code>const</code> because we have a variable that genuinely updates. Let's change it to use <code>reduce</code>:</p>
+
+<pre data-type="programlisting">
+chordCountForDifficulty: function(difficulty, testChord){
+&nbsp; return songList.songs.reduce(function(counter, song){
+&nbsp;&nbsp;&nbsp; if(song.difficulty === difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; song.chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(chord === testChord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter = counter + 1
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; });
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; return counter;
+&nbsp; }, 0);
+},
+</pre>
+
+<p>So here, we have a few changes.</p>
+
+<ul>
+	<li>We return the result of reduce directly.</li>
+	<li>We replace our former <code>counter</code> variable with a parameter to <code>reduce</code>'s callback function.</li>
+	<li>We return the <code>counter</code> inside of the <code>reduce</code> function. Recognize that this is not returning from the <code>chordCountForDifficulty</code> function, but rather, is used inside of <code>reduce</code> to set the <code>counter</code> value as it walks through the <code>songList</code>.</li>
+</ul>
+
+<p>We can also use a <code>filter</code>, rather than a <code>forEach</code> to help us count the elements matching a conditional. The <code>filter</code> function returns a new array consisting of elements that matched the conditional.</p>
+
+<pre data-type="programlisting">
+chordCountForDifficulty: function(difficulty, testChord){
+&nbsp; return songList.songs.reduce(function(counter, song){
+&nbsp;&nbsp;&nbsp; if(song.difficulty === difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter += song.chords.filter(function(chord){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return chord === testChord
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }).length
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; return counter;
+&nbsp; }, 0);
+},
+</pre>
+
+<p>We get the <code>length</code> of this array and add it to the <code>counter</code>. This means fewer updates to the <code>counter</code> and we also shaved two lines off of the length of the&nbsp;<code>chordCountForDifficulty</code> function. We could have used a second <code>reduce</code> here, instead of <code>filter</code>, if we wanted to focus more on the count than the conditional, but that would mean an <code>innerCount</code> variable, which seems a bit clunkier.</p>
+
+<aside data-type="sidebar" id="performance-impacts-ADCgcAuxFk">
+<h5>Performance Impacts</h5>
+
+<p>The changes that we've made to query on an as needed basis rather than create structures more specific to later needs is for refactoring purposes including reducing the size of the code.</p>
+
+<p>Depending on the data access patterns of your program, this strategy might make your program execute slower or faster. Transforming structures into others that you'll <em>never</em> use would be a waste. Transforming them into simpler (shallower) ones that will be accessed frequently could see some performance benefit.</p>
+
+<p>We'll discuss <code>memoization</code> along with functional programming in Chapter 11. It, as well as other caching techniques will help to overcome a performance hit you could take from the kind of refactoring we did here.</p>
+
+<p>In any case, the approach of this book is to write for humans first, and worry about performance after the fact.</p>
+</aside>
+
+<p>Moving on, we only have three functions left in the global scope: <code>train</code>, <code>trainAll</code>, and <code>setLabelProbabilities</code>. Those seem like they would fit right in as part of the <code>classifier</code>. Let's move them now:</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+trainAll: function(){
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; classifier.train(song.chords, song.difficulty);
+&nbsp; });
+&nbsp; classifier.setLabelProbabilities();
+},
+
+train: function(chords, label){
+&nbsp; chords.forEach(chord =&gt; {
+&nbsp;&nbsp;&nbsp; classifier.allChords.add(chord);
+&nbsp; });
+&nbsp; if(Array.from(classifier.labelCounts.keys()).includes(label)){
+&nbsp;&nbsp;&nbsp; classifier.labelCounts.set(
+      label, classifier.labelCounts.get(label) + 1);
+&nbsp; } else {
+&nbsp;&nbsp;&nbsp; classifier.labelCounts.set(label, 1);
+&nbsp; }
+},
+
+setLabelProbabilities: function(){
+&nbsp; classifier.labelCounts.forEach(function(_count, label){
+&nbsp;&nbsp;&nbsp; classifier.labelProbabilities.set(
+      label, classifier.labelCounts.get(label) / songList.songs.length);
+&nbsp; })
+}
+...
+</pre>
+
+<p>The biggest change is that we need to put these functions in the object attribute syntax. Additionally, <code>trainAll</code> needs to prepend its calls to <code>train</code> and <code>setLabelProbabilities</code> with <code>classifier.</code>.</p>
+
+<p>Our call to <code>trainAll</code> in the tests needs a new <code>classifier.</code> also.</p>
+
+<pre data-type="programlisting">
+classifier.trainAll();
+</pre>
+
+<p>The tests should be working at this point.</p>
+
+<p>Now, let's "thisify" our functions. That means changing instances of <code>classifier</code> to <code>this</code> as well as adding the "thisArg" as second arguments to the callbacks of the <code>forEach</code> functions inside of <code>trainAll</code> and <code>setLabelProbabilities</code>:</p>
+
+<pre data-type="programlisting">
+trainAll: function(){
+&nbsp; songList.songs.forEach(function(song){
+&nbsp;&nbsp;&nbsp; this.train(song.chords, song.difficulty);
+&nbsp; }, this);
+&nbsp; this.setLabelProbabilities();
+},
+
+train: function(chords, label){
+&nbsp; chords.forEach(chord =&gt; { this.allChords.add(chord) });
+&nbsp; if(Array.from(this.labelCounts.keys()).includes(label)){
+&nbsp;&nbsp;&nbsp; this.labelCounts.set(label, this.labelCounts.get(label) + 1);
+&nbsp; } else {
+&nbsp;&nbsp;&nbsp; this.labelCounts.set(label, 1);
+&nbsp; }
+},
+
+setLabelProbabilities: function(){
+&nbsp; this.labelCounts.forEach(function(_count, label){
+&nbsp;&nbsp;&nbsp; this.labelProbabilities.set(label, this.labelCounts.get(label) / songList.songs.length);
+&nbsp; }, this)
+}
+</pre>
+
+<p>Now, everything is part of either <code>classifier</code> or <code>songList</code>. We're down to two global variables. Now we can start to think about what belongs where a little more. One attribute of <code>classifier</code> sticks out as more appropriately being a part of <code>songList</code>: <code>allChords</code>.</p>
+
+<p>We can simply move the attribute:</p>
+
+<pre data-type="programlisting">
+const songList = {
+&nbsp; allChords: new Set(),
+</pre>
+
+<p>Now we can delete it from classifier, and change <code>this</code> to <code>songList</code> to its function call inside of <code>train</code>:</p>
+
+<pre data-type="programlisting">
+chords.forEach(chord =&gt; { songList.allChords.add(chord) });
+</pre>
+
+<p>The tests should pass at this point.</p>
+
+<p>Next, since we want our <code>classifier</code> to be the only point of global access in the program, we should move <code>songList</code> into it:</p>
+
+<pre data-type="programlisting">
+const classifier = {&nbsp; 
+  songList: {
+&nbsp;&nbsp;&nbsp; allChords: new Set(),
+&nbsp;&nbsp;&nbsp; difficulties: ['easy', 'medium', 'hard'],
+&nbsp;&nbsp;&nbsp; songs: [],
+&nbsp;&nbsp;&nbsp; addSong: function(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.songs.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords: chords,
+&nbsp;&nbsp;  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulty: this.difficulties[difficulty]})
+&nbsp;   }
+  },
+...
+</pre>
+
+<p>And now, there are a number of references to songList that need to be prepended with <code>this.</code> where they are inside of the <code>classifier</code> object. For those that are in the tests, they need to be prepended with <code>classifier.</code>. Do a search for "songList," and prepend as needed. Save, test, check, commit.</p>
+</section>
+
+<section data-type="sect2" id="arrow-syntax-and-shorthand-function-syntax-dGsASpFA">
+<h2>Arrow Syntax and Shorthand Function Syntax</h2>
+
+<p>Next up, let's address some inconsistencies that we have in our function syntax. We've used arrow functions earlier in the book, but let's go into a bit more detail here. We'll start with an instance where we are using it already. In our <code>train</code> function we have the following:</p>
+
+<pre data-type="programlisting">
+train: function(){
+&nbsp; chords.forEach(chord =&gt; { this.songList.allChords.add(chord) });
+...
+</pre>
+
+<p>You might notice something interesting about this, namely <code>this</code>. We reference <code>this</code> inside of the anonymous function here and are free to not pass a thisArg (<code>this</code>) as the second parameter to <code>forEach</code>. As proof that this is something special with arrow functions and not code that happens to work fine without it, try converting it to the long-hand form:</p>
+
+<pre data-type="programlisting">
+train: function(){
+&nbsp; chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp; this.songList.allChords.add(chord);
+&nbsp; });
+...</pre>
+
+<p>And it will be broken! If you want to use that form, you need to include the <code>this</code>, as we currently do in <code>trainAll</code>:</p>
+
+<pre data-type="programlisting">
+train: function(){
+&nbsp; chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp; this.songList.allChords.add(chord);
+&nbsp; }, this);
+...</pre>
+
+<p>But we could use <code>bind</code> on the function instead (we do this with <code>reduce</code> since it doesn't have an option to pass a thisArg as a second parameter):</p>
+
+<pre data-type="programlisting">
+train: function(){
+&nbsp; chords.forEach(function(chord){
+&nbsp;&nbsp;&nbsp; this.songList.allChords.add(chord);
+&nbsp; }.bind(this));
+...
+</pre>
+
+<p>Instead of doing either of those, let's use the arrow syntax, which passes the <code>this</code> context to the inner function and saves us from having to type the word "function" so much. Awesome!</p>
+
+<p>You might be wondering why we would ever <em>not</em> use the arrow syntax. There are a few cases. Most importantly, you wouldn't want to use it in cases where the <code>this</code> you care about should "not" be the <code>this</code> that you have access to going into the function. For instance, you might expect the <code>this</code> of a click handler in jQuery to refer to the object clicked. If you use an arrow function, that won't be the case.</p>
+
+<p>Another reason is that in this form (ignoring the difficulty in passing parameters), they are very similar to function declaration syntax, so they are easy to extract or inline:</p>
+
+<pre data-type="programlisting">
+// form 1
+chords.forEach(myFunction, this);
+
+function myFunction(){
+&nbsp; this.songList.allChords.add(chord);
+}
+
+// form 2
+chords.forEach(function myFunction(){
+&nbsp; this.songList.allChords.add(chord);
+}, this);
+</pre>
+
+<p>It's easy to convert between these two forms. If you start with an anonymous function (with or without arrow syntax), it's a bit of extra work to convert into a standalone, named function.</p>
+
+<p>But for all of our functions used with <code>forEach</code>, <code>map</code>, <code>reduce</code>, and <code>filter</code>, we can replace them with arrow functions. With them, we shave off about ten lines of code. By the way, with our refactoring so far, what was once about 110 lines is now down to 60. Anyways, it's small enough to see the whole thing at once (minus the tests).</p>
+
+<pre data-type="programlisting">
+const classifier = {
+&nbsp; songList: {
+&nbsp;&nbsp;&nbsp; allChords: new Set(),
+&nbsp;&nbsp;&nbsp; difficulties: ['easy', 'medium', 'hard'],
+&nbsp;&nbsp;&nbsp; songs: [],
+&nbsp;&nbsp;&nbsp; addSong: function(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.songs.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords: chords,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulty: this.difficulties[difficulty]})
+&nbsp;&nbsp;&nbsp; }
+&nbsp; },
+&nbsp; labelCounts: new Map(),
+&nbsp; labelProbabilities: new Map(),
+&nbsp; smoothing: 1.01,
+&nbsp; chordCountForDifficulty: function(difficulty, testChord){
+&nbsp;&nbsp;&nbsp; return this.songList.songs.reduce((counter, song) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(song.difficulty === difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter += song.chords.filter(chord =&gt; chord === testChord).length
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return counter;
+&nbsp;&nbsp;&nbsp; }, 0);
+&nbsp; },
+&nbsp; likelihoodFromChord: function(difficulty, chord){
+&nbsp;&nbsp;&nbsp; return this.chordCountForDifficulty(difficulty, chord) / this.songList.songs.length;
+&nbsp; },
+&nbsp; valueForChordDifficulty(difficulty, chord){
+&nbsp;&nbsp;&nbsp; const value = this.likelihoodFromChord(difficulty, chord);
+&nbsp;&nbsp;&nbsp; return value ? value + this.smoothing : 1;
+&nbsp; },
+&nbsp; trainAll: function(){
+&nbsp;&nbsp;&nbsp; this.songList.songs.forEach(song =&gt; {
+      this.train(song.chords, song.difficulty)
+    });
+&nbsp;&nbsp;&nbsp; this.setLabelProbabilities();
+&nbsp; },
+&nbsp; train: function(chords, label){
+&nbsp;&nbsp;&nbsp; chords.forEach(chord =&gt; { this.songList.allChords.add(chord) });
+&nbsp;&nbsp;&nbsp; if(Array.from(this.labelCounts.keys()).includes(label)){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelCounts.set(label, this.labelCounts.get(label) + 1);
+&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelCounts.set(label, 1);
+&nbsp;&nbsp;&nbsp; }
+&nbsp; },
+&nbsp; setLabelProbabilities: function(){
+&nbsp;&nbsp;&nbsp; this.labelCounts.forEach((_count, label) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelProbabilities.set(label, this.labelCounts.get(label) / this.songList.songs.length);
+&nbsp;&nbsp;&nbsp; })
+&nbsp; },
+&nbsp; classify: function(chords){
+&nbsp;&nbsp;&nbsp; return new Map(Array.from(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelProbabilities.entries()).map(labelWithProbability =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const difficulty = labelWithProbability[0];
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return [difficulty,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords.reduce((total, chord) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * this.valueForChordDifficulty(difficulty, chord);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }, this.labelProbabilities.get(difficulty) +
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.smoothing)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ]
+&nbsp;&nbsp;&nbsp; }));
+&nbsp; }
+};
+</pre>
+
+<p>There are a few things to notice with the arrow syntax. First, if there is only one argument, it does not need to go in parentheses:</p>
+
+<pre data-type="programlisting">
+return new Map(Array.from(
+  this.labelProbabilities.entries()).map(labelWithProbability =&gt; {</pre>
+
+<p>If there are two or more arguments, you'll need them as in this:</p>
+
+<pre data-type="programlisting">
+setLabelProbabilities: function(){
+  this.labelCounts.forEach((_count, label) =&gt;{</pre>
+
+<p>One somewhat strange thing, is that we also need parens if we have zero arguments. At this point, we can change all of our tests to use this syntax:</p>
+
+<pre data-type="programlisting">
+describe('the file', () =&gt; {
+...
+&nbsp; it('classifies', () =&gt; {
+...
+&nbsp; it('classifies again', () =&gt; {
+...
+&nbsp; it('label probabilities', () =&gt; {
+...</pre>
+
+<p>Moving on to function declaration shorthand syntax for objects, we can use the arrow syntax and declare our <code>trainAll</code> function like this:</p>
+
+<pre data-type="programlisting">
+trainAll: () =&gt; {
+&nbsp; this.songList.songs.forEach(song =&gt;{ this.train(song.chords, song.difficulty)});
+&nbsp; this.setLabelProbabilities();
+},
+</pre>
+
+<p>However, this is not what we want, because we actually want the <code>this</code> that we get with the function keyword used, because that <code>this</code> is the object (<code>classifier</code>), which is what our <code>this</code> inside of the function refers to. When we declare functions this way, we get the context outside of the object (the global object in our case, assuming non-strict mode). In any case, there is a better shorthand for function declarations, which we'll get to shortly. Let's put it back to this:</p>
+
+<pre data-type="programlisting">
+trainAll: function(){
+&nbsp; this.songList.songs.forEach(song =&gt;{ this.train(song.chords, song.difficulty)});
+&nbsp; this.setLabelProbabilities();
+},
+</pre>
+
+<p>One other weird thing about the arrow syntax is that sometimes we use braces <code>{}</code>, and other times, we don't. We can see this in the code:</p>
+
+<pre data-type="programlisting">
+song.chords.filter(chord =&gt; chord === testChord)</pre>
+
+<p>The lack of braces might seem a little jarring because it makes the statement more dense. There is an additional consideration with the no brace version though: The no brace version implitly returns the result of its execution. In the case of our last code snippet, that means it returns <code>true</code> or <code>false</code>.</p>
+
+<p>Also to note is that, because the brace syntax is used as a way to group the function body, if you want to return an object like this, you'll be disappointed:</p>
+
+<pre data-type="programlisting">
+someFunction(someArg =&gt; {someThing: 'someValue'}) //nope</pre>
+
+<p>To return an object, you'll need to add parentheses:</p>
+
+<pre data-type="programlisting">
+someFunction(someArg =&gt; ({someThing: 'someValue'})) //ok</pre>
+
+<p>During the discussion of arrow functions, we brushed up against the idea of a shorthand for declaring functions as part of an object. This is how we're currently declaring most functions:</p>
+
+<pre data-type="programlisting">
+const classifier = {
+...
+&nbsp;&nbsp;&nbsp; addSong: function(name, chords, difficulty){
+...
+&nbsp; chordCountForDifficulty: function(difficulty, testChord){
+...
+</pre>
+
+<p>However, we have one exception:</p>
+
+<pre data-type="programlisting">
+valueForChordDifficulty(difficulty, chord){
+
+// instead of 
+
+valueForChordDifficulty: function(difficulty, chord){
+</pre>
+
+<p>Using this shorthand syntax can completely remove the <code>: function</code> part, making the functions look like this:</p>
+
+<pre data-type="programlisting">
+const classifier = {
+&nbsp; songList: {
+...
+&nbsp;&nbsp;&nbsp; addSong(name, chords, difficulty){
+...
+&nbsp; chordCountForDifficulty(difficulty, testChord){
+...
+</pre>
+
+<p>After doing that with all of our function declarations, we are actually completely free from the <code>function</code> keyword in this file! An incredible source of visual noise and extra typing is now gone. Thanks ES2015!</p>
+
+<p>Note however, that this shorthand only works inside of object literals and classes. Outside of those contexts (in a normal function, global scope, or constructor function scope for example), the interpreter will throw an error on the <code>{</code>.</p>
+
+<p>Once again, we can see that our shorthand syntax is less portable than the longhand version.</p>
+
+<aside data-type="sidebar" id="about-computed-properties-aaC9CDSgFp">
+<h5>About <em>Computed Properties</em></h5>
+
+<p>While we're discussing function declaration shorthand, it's worth noting that you could do it dynamically, like this:</p>
+
+<pre data-type="programlisting">
+songs = {
+  ['first' + 'Song']: {},
+&nbsp;&nbsp;['second' + 'Song']: {},
+&nbsp;&nbsp;['third' + 'Song']: {}
+}</pre>
+
+<p>Basically, you can run JavaScript inside those brackets to generate property names. This is a trivial example (and you'd probably want some data in your objects), but you might find this convenient at some point.</p>
+
+<p>Be aware, however, that when dynamically defining labels of properties (or accessing them dynamically as in <code>songs['first' + 'Song']</code>), you lose your ability to easily search for simple strings like <code>firstSong</code> in your code base.</p>
+</aside>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect2" id="getting-new-objects-with-constructor-functions-adsksOFD">
+<h2>Getting new Objects with Constructor Functions</h2>
+
+<p>As of now, we've been dealing with object literals. We'll get to classes in a bit, but first, let's explore another option: creating objects with constructor functions. To use these we would have to change our code to something like the following:</p>
+
+<pre data-type="programlisting">
+const Classifier = function(){
+&nbsp; const SongList = function() {
+&nbsp;&nbsp;&nbsp; this.allChords = new Set();
+&nbsp;&nbsp;&nbsp; this.difficulties = ['easy', 'medium', 'hard'];
+&nbsp;&nbsp;&nbsp; this.songs = [];
+&nbsp;&nbsp;&nbsp; this.addSong = function(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.songs.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords: chords,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulty: this.difficulties[difficulty]})
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+&nbsp; this.songList = new SongList();
+&nbsp; this.labelCounts = new Map();
+&nbsp; this.labelProbabilities = new Map();
+&nbsp; this.smoothing =&nbsp; 1.01;
+&nbsp; this.chordCountForDifficulty = function(difficulty, testChord){
+&nbsp;&nbsp;&nbsp; return this.songList.songs.reduce((counter, song) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(song.difficulty === difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter += song.chords.filter(chord =&gt; chord === testChord).length
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return counter;
+&nbsp;&nbsp;&nbsp; }, 0);
+&nbsp; };
+&nbsp; this.likelihoodFromChord = function(difficulty, chord){
+&nbsp;&nbsp;&nbsp; return this.chordCountForDifficulty(difficulty, chord) / this.songList.songs.length;
+&nbsp; };
+&nbsp; this.valueForChordDifficulty = function(difficulty, chord){
+&nbsp;&nbsp;&nbsp; const value = this.likelihoodFromChord(difficulty, chord);
+&nbsp;&nbsp;&nbsp; return value ? value + this.smoothing : 1;
+&nbsp; };
+&nbsp; this.trainAll = function(){
+&nbsp;&nbsp;&nbsp; this.songList.songs.forEach(song =&gt;{ this.train(song.chords, song.difficulty)});
+&nbsp;&nbsp;&nbsp; this.setLabelProbabilities();
+&nbsp; };
+&nbsp; this.train = function(chords, label){
+&nbsp;&nbsp;&nbsp; chords.forEach(chord =&gt; { this.songList.allChords.add(chord) });
+&nbsp;&nbsp;&nbsp; if(Array.from(this.labelCounts.keys()).includes(label)){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelCounts.set(label, this.labelCounts.get(label) + 1);
+&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelCounts.set(label, 1);
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+&nbsp; this.setLabelProbabilities = function(){
+&nbsp;&nbsp;&nbsp; this.labelCounts.forEach((_count, label) =&gt;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelProbabilities.set(label, this.labelCounts.get(label) / this.songList.songs.length);
+&nbsp;&nbsp;&nbsp; })
+&nbsp; };
+&nbsp; this.classify = function(chords){
+&nbsp;&nbsp;&nbsp; return new Map(Array.from(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.labelProbabilities.entries()).map(labelWithProbability =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const difficulty = labelWithProbability[0];
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return [difficulty,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords.reduce((total, chord) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * this.valueForChordDifficulty(difficulty, chord);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }, this.labelProbabilities.get(difficulty) + this.smoothing)]
+&nbsp;&nbsp;&nbsp; }));
+&nbsp; };
+};
+const wish = require('wish');
+describe('the file', () =&gt; {
+&nbsp; const classifier = new Classifier();
+...
+</pre>
+
+<p>The tests only have a small change because we need to initialize our classifier with:</p>
+
+<pre data-type="programlisting">
+const classifier = new Classifier();
+</pre>
+
+<p>That is how you instantiate an object in JavaScript using <code>new</code> with a constructor function. Notice that we are also instantiating a <code>songList</code> property in a similar way inside of the classifier:</p>
+
+<pre data-type="programlisting">
+this.songList = new SongList();</pre>
+
+<p>Most of our changes are to existing code, but the new <code>Classifier()</code> and <code>new SongList()</code> lines are, well, new.</p>
+
+<div data-type="warning" id="dont-forget-to-use-new-in-constructor-functions-APuVtXsxFk"><h6>Warning</h6>
+<h1>Don't forget to use <code>new</code> in constructor functions</h1>
+
+<p>If you forget <code>new</code> when calling a constructor function, the your function may still run fine, but there's a chance it won't. This is because <code>this</code> will be bound to the global object (or undefined in strict mode).</p>
+
+<p>Sometimes, this fear (what if people forget the new keyword!?) is cited as the main motivation behind prefering using the <code>Object.create</code> to <code>new</code> with a constructor function. The stronger case for <code>Object.create</code> has more to do with seeking consistency with and not obscuring JavaScript's prototypal nature, rather than using the "pseudoclassical style" that constructor functions (and classes) with <code>new</code> promotes.</p>
+
+<p>On the more flexible side of things, the parentheses after the constructor call following <code>new</code> are optional when no arguments are passed to the function. It's a bit weird, but these are the same:</p>
+
+<pre data-type="programlisting">
+this.songList = new SongList();
+this.songList = new SongList;
+</pre>
+</div>
+
+<p>There is an important difference between creating objects like this and using object literals. If you use an object literal, you are stuck doing some cloning/deep copying/<code>Object.create</code> hijinks to get a new version. As we explored earlier, assigning something to a new variable using <code>=</code> just creates a new reference to the same object: two fingers pointing to the same moon. If you need more than one moon, you're going to need <code>new</code>, <code>Object.create</code>, <code>class</code>, and/or some other copying/cloning utility. If you know that you're going to want more than one object, object literals might not be the best starting point for creating them.</p>
+
+<p>This snippet also demonstrates another result of this change: we have to add <code>this.</code> to all of our properties when we use a constructor function. Also notice that this syntax forces us to add our <code>function</code> keywords back in with the colons replaced with equal signs. Lastly, the commas at the end of statements have been replaced with semicolons (or not, in special cases, if you're one of those people).</p>
+
+<div data-type="note" id="speaking-of-semicolons-QDuJsKslFO"><h6>Note</h6>
+<h1>Speaking of semicolons...</h1>
+
+<p>Some people really hate semicolons. They'll only use them when absolutely necessary, as evidence of their deep knowledge of JavaScript's "automatic semicolon insertion," aka "ASI."</p>
+
+<p>Personally, I find the edge-cases for when semicolons are necessary somewhat hard to remember, and I feel that others (including people I work with) do too. For those reasons, I include them most of the time.</p>
+
+<p>"To semicolon, or not to semicolon?" is not the ultimate question for a human: This is a job for a linter to handle.</p>
+</div>
+
+<p>Although the syntax might not be what we prefer, the tests still pass, so this is a successful refactoring so far. What have we gained? Well, because we're inside of the constructor funtion and not constrained by the JSON syntax, we're free to write any statements we want. That means we could have private functions and variables inside of the constructor, as well as declaring global variables by not using <code>var</code>, <code>let</code>, or <code>const</code> (we could also do that in the object literal syntax, but not as directly).</p>
+</section>
+
+<section data-type="sect2" id="constructor-functions-vs-factory-functions-MQsDF7Fa">
+<h2>Constructor Functions vs. Factory Functions</h2>
+
+<p>Let's take a break from our classifier for just a minute. You might find this sample similar to the <code>diary</code> code from Chapter 5, as it also concerns privacy. However, this discussion is focused more on objects and their creation.</p>
+
+<p>We'll be defining our API later in a later section of this chapter, and in order to do that, we should be familiar with what we can and can't access inside of constructor functions. The following code sample is a bit shorter, so it will be easier to understand this before applying the concepts to our NBC code:</p>
+
+<pre data-type="programlisting">
+const Secret = function(){
+  this.normalInfo = 'this is normal';
+&nbsp; const secret = 'sekrit';
+&nbsp; const secretFunction = function(){
+&nbsp;&nbsp;&nbsp; return secret;
+&nbsp; }
+&nbsp; this.notSecret = function(){
+&nbsp;&nbsp;&nbsp; return secret;
+&nbsp; }
+&nbsp;&nbsp;totallyNotSecret = "I'm defined in the global scope";
+}
+let s = new Secret();
+console.log(s.normalInfo) //'this is normal'
+console.log(s.secret) //undefined
+console.log(s.secretFunction()) //error
+console.log(s.notSecret()) //'sekrit'
+console.log(s.totallyNotSecret) //undefined
+console.log(totallyNotSecret) //I'm defined in the global scope</pre>
+
+<p>An alternative to creating objects with the <code>new</code> keyword is using <code>Object.create</code>. Before we change our classifier, let's just observe the differences between this construct vs. <code>new</code> as in the last snippet.</p>
+
+<pre data-type="programlisting">
+var secretTemplate = (function(){
+  var obj = {};
+&nbsp; obj.normalInfo = 'this is normal';
+&nbsp; const secret = 'sekrit';
+&nbsp; const secretFunction = function(){
+&nbsp;&nbsp;&nbsp; return secret;
+&nbsp; }
+&nbsp; obj.notSecret = function(){
+&nbsp;&nbsp;&nbsp; return secret;
+&nbsp; }
+&nbsp;&nbsp;totallyNotSecret = "I'm defined in the global scope";
+  return obj;
+})();
+let s = Object.create(secretTemplate);
+console.log(s.normalInfo) //'this is normal'
+console.log(s.secret) //undefined
+console.log(s.secretFunction()) //error
+console.log(s.notSecret()) //'sekrit'
+console.log(s.totallyNotSecret) //undefined
+console.log(totallyNotSecret) //"I'm defined in the global scope"</pre>
+
+<p>So when we use <code>Object.create</code>, we need to supply an <em>object</em> to be patterned from. To retain the flexibility of using a constructor with <code>new</code>, we end up returning an object inside of the function. Note that this function is an "Immediately Invoked Function Expression," aka. an "IIFE." We could happily use a normal function expression as well:</p>
+
+<pre data-type="programlisting">
+var secretTemplate = function(){
+...
+}
+let s = Object.create(secretTemplate());
+</pre>
+
+<p>This gives us the same object, but seem a bit less clear. Also, in this construction, the function will have to run every time we create a new object. In the IIFE version, the <code>secretTemplate</code> function only has to run once, and creating new objects will just reference the template object that was created.</p>
+
+<p>Reordering our code a bit, we could express our object returning code more consisely like this:</p>
+
+<pre data-type="programlisting">
+var secretTemplate = (function(){
+&nbsp; const secret = 'sekrit';
+&nbsp; const secretFunction = function(){
+&nbsp;&nbsp;&nbsp; return secret;
+&nbsp; }
+&nbsp; totallyNotSecret = "I'm defined in the global scope";
+&nbsp;&nbsp;return {normalInfo: 'this is normal',
+          notSecret(){
+            return secret;
+          }}
+})();
+let s = Object.create(secretTemplate);
+console.log(s.normalInfo) //'this is normal'
+console.log(s.secret) //undefined
+console.log(s.secretFunction()) //error
+console.log(s.notSecret()) //'sekrit'
+console.log(s.totallyNotSecret) //undefined
+console.log(totallyNotSecret) //"I'm defined in the global scope"
+</pre>
+
+<p>This uses the "module pattern," not to be confused with modules to import and export packages. A popular variation on the module pattern is the "revealing module pattern," shown below:</p>
+
+<pre data-type="programlisting">
+var secretTemplate = (function(){
+&nbsp; const secret = 'sekrit';
+&nbsp; const secretFunction = function(){
+&nbsp;&nbsp;&nbsp; return secret;
+&nbsp; }
+&nbsp; totallyNotSecret = "I'm defined in the global scope";
+  const normalInfo = 'this is normal';
+  const notSecret = function(){
+&nbsp;&nbsp;&nbsp; return secret;
+  }
+&nbsp;&nbsp;return {normalInfo: normalInfo,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; notSecret: notSecret}
+})();
+let s = Object.create(secretTemplate);
+console.log(s.normalInfo) //'this is normal'
+console.log(s.secret) //undefined
+console.log(s.secretFunction()) //error
+console.log(s.notSecret()) //'sekrit'
+console.log(s.totallyNotSecret) //undefined
+console.log(totallyNotSecret) //"I'm defined in the global scope"
+</pre>
+
+<p>This is a bit cleaner as it makes the object that is returned very concise and readable.</p>
+
+<aside data-type="sidebar" id="one-more-thing-about-iifes-zqCxCbFbFl">
+<h5>One more thing about IIFEs</h5>
+
+<p>Above, we used an IIFE as the right hand of our assignment statement. In that case, the variable is likely a good candidate to export as a module.</p>
+
+<p>In other cases, where an IIFE is used specifically to reduce the scope of the code inside, we can use a block instead. So this:</p>
+
+<pre data-type="programlisting">
+(function(){
+// code we don't want outside of this scope
+})();</pre>
+
+<p>Becomes this:</p>
+
+<pre data-type="programlisting">
+{
+// code we don't want outside of this scope
+};</pre>
+
+<p>But if you try to use a block, meaning <code>{}</code>, on the right hand of an assignment (as we did with an IIFE), it will be interpreted as an object and likely give an error. In those cases, you're stuck with the IIFE.</p>
+</aside>
+
+<p>Getting back to our classifier, how would we use the <code>Object.create</code> pattern? It turns out to be very simple, and it relies on the object literal syntax much more than how we rearranged things to use <code>new</code> with the constructor functions in the last section.</p>
+
+<pre data-type="programlisting">
+const classifierTemplate = {
+&nbsp; songList: {
+&nbsp;&nbsp;&nbsp; allChords: new Set(),
+...
+const wish = require('wish');
+describe('the file', () =&gt; {
+&nbsp; var classifier = Object.create(classifierTemplate);
+</pre>
+
+<p>To make this code work, we only need two changes from what we did with the object literal. First, we need to regard our initial object as a <em>template</em>, so we rename it <code>classifierTemplate</code>. Second, in our tests (which refer to <code>classifier</code>), we create the <code>classifier</code> object by passing the template object to <code>Object.create</code>. Note that we are just using an object literal here, and not a function or IIFE because we don't have anything that we care about being private at the moment.</p>
+
+<p>In case you forgot what advantage a factory function with <code>Object.create</code> and a constructor function with <code>new</code> have over just using the object literal directly, the main thing is that these are ways to create multiple <code>classifier</code> variables. The <code>songList</code> is a property of <code>classifier</code>, and as a nested object, a new version will be created for each <code>classifier</code>, even though it uses the object literal syntax. <code>Object.create</code> and <code>new</code> (along with classes and modules) are also your gateways to inheritance, which we'll discuss in more depth in the next chapter.</p>
+</section>
+
+<section data-type="sect2" id="a-class-for-our-classifier-GZsGi0Fm">
+<h2>A <code>class</code> for our Classifier</h2>
+
+<p>Next, we'll convert our code into a class. Note that neither of our objects is a good fit for <code>Map</code> because they contain various of attributes, including functions. So what do we need to change to <em>classify</em> our code? Not too much:</p>
+
+<pre data-type="programlisting">
+class Classifier {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this.songList = {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allChords: new Set(),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulties: ['easy', 'medium', 'hard'],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; songs: [],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; addSong: function(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.songs.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords: chords,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulty: this.difficulties[difficulty]})
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; this.labelCounts = new Map();
+&nbsp;&nbsp;&nbsp; this.labelProbabilities = new Map();
+&nbsp;&nbsp;&nbsp; this.smoothing = 1.01;
+&nbsp; };
+&nbsp; chordCountForDifficulty(difficulty, testChord){
+&nbsp;&nbsp;&nbsp; return this.songList.songs.reduce((counter, song) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(song.difficulty === difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter += song.chords.filter(chord =&gt; chord === testChord).length
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return counter;
+&nbsp;&nbsp;&nbsp; }, 0);
+&nbsp; };
+...
+</pre>
+
+<p>The first line might look a bit like a function definition, and under the hood it is (although this is becoming apparent as JS classes evolve), but it's a special kind of function. And like a function, we could also assign a class expression to a variable, like this:</p>
+
+<pre data-type="programlisting">
+const Classifier = class {</pre>
+
+<p>As for the other changes in our code, the most significant changes in adapting from the object literal syntax are (as with when we used a constructor function) having semicolons instead of commas. Otherwise our function definitions are the same. Properties that aren't functions, however, can conveniently be defined inside of a <code>constructor</code> function and use the <code>this.</code> syntax and semicolons at the end. The <code>constructor</code> function runs when a new object is created, and it is responsible for assigning properties.</p>
+
+<p>The only other important change is how the constructor is called, which is identical to the <code>new</code>/constructor function pattern:</p>
+
+<pre data-type="programlisting">
+const classifier = new Classifier();</pre>
+
+<p>Recall from earlier that, if you don't have any arguments needed for the constructor, this will work fine without the parentheses:</p>
+
+<pre data-type="programlisting">
+const classifier = new Classifier;</pre>
+
+<aside data-type="sidebar" id="static-functions-LqCdSvigFj">
+<h5>Static Functions</h5>
+
+<p>One utility that classes offer is the ability to add "static" functions. These are useful if you have any functions that don't require an instance to be useful. In our case, every function we have references <code>this</code>, a sure sign that none of them can be made static. If we wanted to be very aggressive and extract a static function (that only is responsible for division), we could try turn our <code>likelihoodFromChord</code> from this:</p>
+
+<pre data-type="programlisting">
+likelihoodFromChord(difficulty, chord){
+&nbsp; return this.chordCountForDifficulty(difficulty, chord)
+  / this.songList.songs.length;
+};
+</pre>
+
+<p>into these:</p>
+
+<pre data-type="programlisting">
+likelihoodFromChord(difficulty, chord){
+&nbsp; return this.divide(this.chordCountForDifficulty(difficulty,
+                                                  chord),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.songList.songs.length);
+};
+divide(dividend, divisor){
+&nbsp; return dividend / divisor;
+};
+</pre>
+
+<p>And since <code>divide</code> clearly has nothing to do with the function itself (appparent because there are no references to <code>this</code>), we can make it static, and change the call to reflect the new container of the function (the class, rather than the instance):</p>
+
+<pre data-type="programlisting">
+likelihoodFromChord(difficulty, chord){
+&nbsp; return Classifier.divide(this.chordCountForDifficulty(difficulty, chord),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;      &nbsp;&nbsp;&nbsp;&nbsp; this.songList.songs.length);
+};
+static divide(dividend, divisor){
+&nbsp; return dividend / divisor;
+};
+</pre>
+
+<p>This change is unnecessary, as <code>/</code> gets the job done just fine, but static functions are fairly easy to implement. Feel free to revert these changes.</p>
+</aside>
+
+<p>&nbsp;</p>
+
+<aside data-type="sidebar" id="but-arent-classes-bad-8MC0FJiLFo">
+<h5>But aren't classes bad?</h5>
+
+<p>"JavaScript doesn't have real classes! They are just functions and prototypes and objects underneath! It's a trick. Don't fall for it! It's <em>true nature</em> is disguised by them!"</p>
+
+<p>Or "JavaScript was only built in ten days or something, right? It's a mess underneath, and clinging to new syntax is our only hope to avoid thinking about the differences between prototype, [[prototype]], getPrototypeOf, and __proto__."</p>
+
+<p>Alternatively, "classes are fine and useful if they run on your platform and your team can understand them."</p>
+
+<p>Also, as more features are added to JavaScript classes (such as real private attributes as discussed in Chapter 5), they are starting to look less like syntactic sugar and more like a unique construct. This doesn't invalidate arguments of preferring functional programming over OOP, but it does weaken the "classes are nothing special" argument.</p>
+</aside>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="choosing-our-api-2ksJIVF3">
+<h2>Choosing Our API</h2>
+
+<p>Now that our class is looking to be in pretty good shape, it's time to consider our API itself. In other words, if someone was importing our code as a module, what functions would be public (accessible to them), and which would be private? As we know from Chapter 5, the private/public distinction is a bit complicated in JavaScript (as of this writing, "private" currently either means obscured or inaccessible, although this is likely to change), but nonetheless, we can determine the ideal now, even before realizing the distinction fully in a module. We'll tackle that in the next section. For now, we're just choosing what functions we definitely want to be accessible.</p>
+
+<p>There are three functions from <code>classify</code> that we need to be public:</p>
+
+<ul>
+	<li><code>constructor</code></li>
+	<li><code>trainAll</code></li>
+	<li><code>classify</code></li>
+</ul>
+
+<div data-type="note" id="what-about-train-APuwUbIxFk"><h6>Note</h6>
+<h1>What about <code>train</code>?</h1>
+
+<p>Currently, our API relies on following the pattern of adding songs and then training them all at once. Unfortunately, because of the side effects we have, our code is not <em>idempotent</em> (a concept covered in Chapter 11). In other words, our functions are not "pure," because of their side-effects, and running them in a different order than specified (or multiple times), is not handled well.</p>
+
+<p>Namely, <code>train</code> does not run <code>setLabelProbabilities</code>, and if <code>setLabelProbabilities</code> was tied to <code>train</code>, instead of <code>trainAll</code>, our tests would break.</p>
+
+<p>This is a problem we will not fix in this chapter, but there is an idempotent (and functional) version of this an NBC in Chapter 11.</p>
+</div>
+
+<p>Additionally, our <code>addSong</code> function from <code>songList</code> needs to be accessible. For convenience's sake, let's add a function to the <code>classifier</code>:</p>
+
+<pre data-type="programlisting">
+class Classifier&nbsp; {
+&nbsp; constructor(){
+...
+&nbsp; };
+&nbsp; addSong(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp; this.songList.addSong(name, chords, difficulty)
+&nbsp; };
+...
+</pre>
+
+<p>Now we can call the function directly from the classifier, which means the calls in our tests like this:</p>
+
+<pre data-type="programlisting">
+classifier.songList.addSong('imagine', ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], 0)
+classifier.songList.addSong('somewhereOverTheRainbow', ['c', 'em', 'f', 'g', 'am'], 0)
+</pre>
+
+<p>Can turn into this:</p>
+
+<pre data-type="programlisting">
+classifier.addSong('imagine', ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], 0)
+classifier.addSong('somewhereOverTheRainbow', ['c', 'em', 'f', 'g', 'am'], 0)
+</pre>
+
+<p>Additionally, since our function in the classifier has become pure delegation, we no longer need to be so specific about the parameters:</p>
+
+<pre data-type="programlisting">
+class Classifier&nbsp; {
+&nbsp; constructor(){
+...
+&nbsp; };
+&nbsp; addSong(...songParams){ //rest
+&nbsp;&nbsp;&nbsp; this.songList.addSong(...songParams); //spread
+&nbsp; };
+...
+</pre>
+
+<p>The <code>...songParams</code> in the function definition is known as "rest parameter syntax" and using a similar style in a function call is known as the "spread operator." It's hard to keep these terms straight, but Chris Deely, one of the technical reviewers of this book, suggested "<strong>r</strong>est" is for "<strong>r</strong>eceiving," "<strong>s</strong>pread" is for "<strong>s</strong>ending." That works for me. Thanks Chris.</p>
+
+<p>The rest parameter syntax takes any arguments you give it and turns them into an array. The spread operator does the opposite, splitting the array you give it into individual arguments to pass to the function.</p>
+
+<p>The reason this is a good pattern to apply in this situation is that we already have a function definition for <code>addSong</code> inside of <code>songList</code>. If we decided to change the function in terms of what arguments it accepts, it would be nice not to have to change this function as well. Using rest and spread here affords us that flexibility.</p>
+
+<p>By the way, if we discovered that in actuality, <code>songList</code> was doing all the work, and <code>classifier</code> was simply delegating every function to it, removing these delegatation functions and letting the tests (or "client code" that uses our module) call the <code>songList</code> versions directly would be worth considering. Having just one object that the client interacts with is nice for them, but if our delgation is adding sufficient bulk, we should rethink the design.</p>
+</section>
+
+<section data-type="sect2" id="time-for-a-little-privacy-BZs6HWFX">
+<h2>Time for a Little Privacy?</h2>
+
+<p>As we saw in the Chapter 5, if we want fake privacy in a class, we can just add an underscore <code>_</code> in front of all of the properties we want to be private. This convention lets people using the API know that they're in weird territory if they're addressing these properties directly (sometimes the private/internal aspects of an API are referred to as the "plumbing" as opposed to the "porcelain").</p>
+
+<p>Hopefully, your editor has a way to easily rename things (find and replace across not just a file, but the whole project). These are the labels you should change to having an underscore in front of them:</p>
+
+<ul>
+	<li><code>songList</code></li>
+	<li><code>labelCounts</code></li>
+	<li><code>labelProbabilities</code></li>
+	<li><code>smoothing</code></li>
+	<li><code>chordCountForDifficulty</code></li>
+	<li><code>likelihoodFromChord</code></li>
+	<li><code>valueForChordDifficulty</code></li>
+	<li><code>train</code></li>
+	<li><code>setLabelProbabilities</code></li>
+</ul>
+
+<p>Now we have an extremely simple path to exporting our class as a module. Let's split up our tests and main file to prove it. First, we have some changes to make to nb.js:</p>
+
+<pre data-type="programlisting">
+module.exports = class Classifier{
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this._songList = {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allChords: new Set(),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulties: ['easy', 'medium', 'hard'],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; songs: [],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; addSong: function(name, chords, difficulty){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.songs.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; chords: chords,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; difficulty: this.difficulties[difficulty]})
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; this._labelCounts = new Map();
+&nbsp;&nbsp;&nbsp; this._labelProbabilities = new Map();
+&nbsp;&nbsp;&nbsp; this._smoothing = 1.01;
+&nbsp; };
+&nbsp; addSong(...songParams){ //rest
+...
+&nbsp; _setLabelProbabilities(){
+&nbsp;&nbsp;&nbsp; this._labelCounts.forEach((_count, label) =&gt;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this._labelProbabilities.set(label, this._labelCounts.get(label) / this._songList.songs.length);
+&nbsp;&nbsp;&nbsp; })
+&nbsp; }
+};
+</pre>
+
+<p>There are only two changes that we need to make. The first is that the first line has this at the beginning:</p>
+
+<pre data-type="programlisting">
+module.exports = </pre>
+
+<p>The second is that we're moving all of our testing to a separate file (in the same) directory called nb_test.js:</p>
+
+<pre data-type="programlisting">
+Classifier = require('./nb.js');
+const wish = require('wish');
+describe('the file', () =&gt; {
+&nbsp; const classifier = new Classifier;
+&nbsp; classifier.addSong('imagine', ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], 0)
+...
+&nbsp; it('label probabilities', () =&gt; {
+&nbsp;&nbsp;&nbsp; wish(classifier._labelProbabilities.get('easy') ===
+      0.3333333333333333);
+&nbsp;&nbsp;&nbsp; wish(classifier._labelProbabilities.get('medium') ===
+      0.3333333333333333);
+&nbsp;&nbsp;&nbsp; wish(classifier._labelProbabilities.get('hard') ===
+      0.3333333333333333);
+&nbsp; });
+})
+</pre>
+
+<p>Again, we only have one change from our tests before, and it's right up top. If you run <strong><code>mocha nb_test.js</code></strong>, you should have no failures. Awesome.</p>
+
+<p>But do you want actual privacy? For now, you have a couple of options. The first is to go the "revealing module pattern" route, change the class back into a constructor function, and make some seriously hefty changes. Or, you could try some more convoluted and esoteric things with ES2015's "Symbols" (creating privacy through obscurity) or WeakMaps, or using an initialization function (which is basically designing your own form of the revealing module pattern).</p>
+
+<p>If we honestly think about the tradeoffs here though, what are you gaining by doing something complex and non-standard? You're making more work for yourself and others that might work on your module. The code itself and the tests become more complex. Losing your ability to call tests for <em>truly</em> private, unaddressable functions seems like a non-starter.</p>
+
+<p>What do you give up by going with the <code>_</code> route? A few extra characters here and there make your code ugly? People will think you're too dumb to use the latest and most confusing workarounds? People using your module will insist on calling those functions, even if for the unitiated, you indicated in your documentation that they shouldn't?</p>
+
+<p>If your program is already living in constructor function city, this is a tougher call, but if you're using classes, adding underscores seems like the much easier solution.</p>
+
+<p>All that said, it seems like private fields and methods could be headed our way soon (the spec is still in the works as of this writing). See Chapter 5 for more details.</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="adapting-the-classifier-to-a-new-problem-domain-4PsAUlFX">
+<h2>Adapting the Classifier to a New Problem Domain</h2>
+
+<p>And now for the last topic for this program: What if, instead of songs with chords, we're working with learning vocabulary, and instead of "easy," "medium," and "hard," we're classifying a corpus of text as either "understood" or "not understood?"</p>
+
+<p>Some people (both coders and non-coders), upon thinking about a potential abstraction like this, will jump to the general case right away. Think about abstracting a general NBC with the code from the beginning vs. the code now. Personally, I recommend building 2 or 3 kinds of something before insisting on how they are similar and attempting to abstract them.</p>
+
+<p>Now that our code is in better shape, and our program is fairly small, it's easy enough to attempt for this one.</p>
+
+<p>Mostly, all we have to do is rename a lot of objects.&nbsp;</p>
+
+<pre data-type="programlisting">
+module.exports = class Classifier&nbsp; {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this._textList = {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; allWords: new Set(),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; understood: ['yes', 'no'],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; texts: [],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; addText: function(name, words, comprehension){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.texts.push({name: name,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; words: words,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; comprehension: this.understood[comprehension]})
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; this._labelCounts = new Map();
+&nbsp;&nbsp;&nbsp; this._labelProbabilities = new Map();
+&nbsp;&nbsp;&nbsp; this._smoothing = 1.01;
+&nbsp; };
+&nbsp; addText(...textParams){ //rest
+&nbsp;&nbsp;&nbsp; this._textList.addText(...textParams); //spread
+&nbsp; };
+&nbsp; _wordCountForcomprehension(comprehension, testword){
+&nbsp;&nbsp;&nbsp; return this._textList.texts.reduce((counter, text) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; if(text.comprehension === comprehension){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counter += text.words.filter(word =&gt; word === testword).length
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return counter;
+&nbsp;&nbsp;&nbsp; }, 0);
+&nbsp; };
+
+&nbsp; _likelihoodFromword(comprehension, word){
+&nbsp;&nbsp;&nbsp; return this._wordCountForcomprehension(comprehension, word) / this._textList.texts.length;
+&nbsp; };
+&nbsp; _valueForwordcomprehension(comprehension, word){
+&nbsp;&nbsp;&nbsp; const value = this._likelihoodFromword(comprehension, word);
+&nbsp;&nbsp;&nbsp; return value ? value + this._smoothing : 1;
+&nbsp; };
+&nbsp; classify(words){
+&nbsp;&nbsp;&nbsp; return new Map(Array.from(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this._labelProbabilities.entries()).map(labelWithProbability =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; const comprehension = labelWithProbability[0];
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return [comprehension,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; words.reduce((total, word) =&gt; {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return total * this._valueForwordcomprehension(comprehension, word);
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }, this._labelProbabilities.get(comprehension) + this._smoothing)]
+&nbsp;&nbsp;&nbsp; }));
+&nbsp; };
+
+&nbsp; trainAll(){
+&nbsp;&nbsp;&nbsp; this._textList.texts.forEach(text =&gt;{ this._train(text.words, text.comprehension)});
+&nbsp;&nbsp;&nbsp; this._setLabelProbabilities();
+&nbsp; };
+
+&nbsp; _train(words, label){
+&nbsp;&nbsp;&nbsp; words.forEach(word =&gt; { this._textList.allWords.add(word) });
+&nbsp;&nbsp;&nbsp; if(Array.from(this._labelCounts.keys()).includes(label)){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this._labelCounts.set(label, this._labelCounts.get(label) + 1);
+&nbsp;&nbsp;&nbsp; } else {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this._labelCounts.set(label, 1);
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+
+&nbsp; _setLabelProbabilities(){
+&nbsp;&nbsp;&nbsp; this._labelCounts.forEach((_count, label) =&gt;{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this._labelProbabilities.set(label, this._labelCounts.get(label) / this._textList.texts.length);
+&nbsp;&nbsp;&nbsp; })
+&nbsp; }
+};
+</pre>
+
+<p>And the tests:</p>
+
+<pre data-type="programlisting">
+Classifier = require('./25_not_music.js');
+const wish = require('wish');
+describe('the file', () =&gt; {
+&nbsp; const classifier = new Classifier;
+&nbsp; classifier.addText('english text',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q'],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 0)
+&nbsp; classifier.addText('japanese text',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ['あ', &nbsp;&nbsp; &nbsp;'い',&nbsp;&nbsp; &nbsp;'う', &nbsp;&nbsp; &nbsp;'え', &nbsp;&nbsp; &nbsp;'お',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'か', &nbsp;&nbsp; &nbsp;'き',&nbsp;&nbsp; &nbsp;'く',&nbsp;&nbsp; &nbsp;'け',&nbsp;&nbsp; &nbsp;'こ'],
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 1)
+
+&nbsp; classifier.trainAll();
+&nbsp; it('classifies', () =&gt;{
+&nbsp;&nbsp;&nbsp; const classified = classifier.classify(['お', 'は', 'よ', 'う', 'ご', 'ざ', 'い', 'ま', 'す']);
+&nbsp;&nbsp;&nbsp; wish(classified.get('yes') === 1.51);
+&nbsp;&nbsp;&nbsp; wish(classified.get('no') === 5.19885601);
+&nbsp; });
+&nbsp; it('number of words', ()=&gt;{
+&nbsp;&nbsp;&nbsp; wish(classifier._textList.allWords.size === 27);
+&nbsp; });
+
+&nbsp; it('label probabilities', ()=&gt;{
+&nbsp;&nbsp;&nbsp; wish(classifier._labelProbabilities.get('yes') === 0.5);
+&nbsp;&nbsp;&nbsp; wish(classifier._labelProbabilities.get('no') === 0.5);
+&nbsp; });
+});
+</pre>
+
+<p>Based on the earlier input, the tests show that the Japanese is likely to be incomprehensible to someone represented by the initial training data. If we want to go further with this text classifier, we might be interested in processing the text more thoroughly. This could mean by character/letter, by word, by sentence, or getting deeper into the grammars of the target languages with techniques like "stemming." Similarly, with the music version, we could have considered sequences of chords (transitions can be more difficult than the chords themselves). It's possible that a reader of both languages could have a different threshold of understanding not based on the a specific vocabulary (eg. parts of a motorcycle), rather than classifying everything in one language as incomprehensible.</p>
+
+<p>Again (as we did with "easy," "medium," "hard"), we're stopping one step before our classifier prints "yes/no" or "Japanese/English," (we could train for either scenario) so we just pick the category with largest associated number. Feel free to add a test and implement that feature if you're feeling ambitious.</p>
+
+<p>Anyways, those are all features to add, but our purpose in this chapter, improving the quality of the code, has been accomplished. So we're all set. Check out Chapter 11 for a functional version of this code.</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="wrapping-up-Y0soiq">
+<h1>Wrapping Up</h1>
+
+<p>In this chapter (and the one before), we covered a huge range of general refactoring techniques. Throughout the rest of the book, we'll be looking at more specialized styles based on the paradigms JavaScript provides: including Object-Oriented Programming, Functional Programming, and Asynchronous Programming.</p>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+  </body>
+</html>

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <!-- This is a placeholder element for use with the automatic TOC generation option in Atlas --> 
+<nav data-type="toc">
+<ol>
+  <li data-type="preface">
+    <a href="preface.html">Preface</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="preface.html#why-this-book-exists-3mfwCA">Why This Book Exists</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#who-this-book-is-for-jPf0Fr">Who This Book Is For</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#how-to-use-this-book-2vfWUR">How To Use This Book</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#some-words-in-this-book-nPfXcN">Some Words in This Book</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="preface.html#app-application-program-W5fvTocw">App, application, program</a>
+  </li>
+  <li data-type="sect2">
+    <a href="preface.html#inclusivity-through-words-and-diagrams-y5f4CNcZ">Inclusivity Through Words and Diagrams</a>
+  </li>
+  <li data-type="sect2">
+    <a href="preface.html#users-g2fEhKcL">Users</a>
+  </li>
+  <li data-type="sect2">
+    <a href="preface.html#api-interface-implementation-client-code-OzfoFOcV">API, interface, implementation, "client code"</a>
+  </li>
+  <li data-type="sect2">
+    <a href="preface.html#inputs-non-local-and-free-variables-ogfXH8cL">Inputs (non-local and "free variables")</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#_conventions_used_in_this_book">Conventions Used in This Book</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#_using_code_examples">Using Code Examples</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#_safari_books_online">Safari® Books Online</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#_how_to_contact_us">How to Contact Us</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="preface.html#_acknowledgments">Acknowledgments</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch01.html">What is Refactoring?</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch01.html#how-can-you-guarantee-behavior-doesnt-change-lRsdS3">How can you guarantee behavior doesn't change?</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch01.html#why-dont-we-care-about-details-of-implementation-12sZF8Sr">Why don't we care about details of implementation?</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch01.html#why-dont-we-care-about-unspecified-and-untested-behavior-GGszu9SB">Why don't we care about unspecified and untested behavior?</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch01.html#why-dont-we-care-about-performance-wgsaUZS9">Why don't we care about performance?</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch01.html#what-is-the-point-of-refactoring-if-behavior-doesnt-change-mRsJtG">What is the point of refactoring if behavior doesn't change?</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch01.html#balancing-quality-and-getting-things-done-qQsafQtY">Balancing Quality and Getting Things Done</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch01.html#what-is-quality-and-how-does-it-relate-to-refactoring-BgsWSEtZ">What is quality and how does it relate to refactoring?</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch01.html#what-is-and-isnt-refactoring-eEs7IR">What is and isn't refactoring</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch01.html#wrapping-up-7VsbCM">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch02.html">Which JavaScript Are You Using?</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch02.html#versions-and-specifications-MNs8UZ">Versions and Specifications</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch02.html#platforms-and-implementations-wQs1SZ">Platforms and Implementations</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch02.html#precompiled-languages-4gsbsk">Precompiled Languages</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch02.html#frameworks-k0slFD">Frameworks</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch02.html#libraries-avsgix">Libraries</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch02.html#what-javascript-do-you-need-8zsyIp">What JavaScript Do You Need?</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch02.html#what-javascript-are-we-using-gvsyCA">What JavaScript Are We Using?</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch02.html#wrapping-up-LesxH4">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch03.html">Testing</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch03.html#the-many-whys-of-testing-Njsycy">The Many Whys of Testing</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch03.html#the-many-ways-of-testing-eesbtQ">The Many Ways of Testing</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch03.html#manual-testing-74sgS4tg">Manual Testing</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch03.html#documented-manual-testing-VOsWf8ta">Documented Manual Testing</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch03.html#approval-tests-WQsRhVtk">Approval Tests</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch03.html#end-to-end-tests-wNsVudtl">End-to-End Tests</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch03.html#unit-tests-pWsNsztP">Unit Tests</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch03.html#non-functional-testing-gMseFVtr">Non-functional Testing</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch03.html#other-test-types-of-interest-QlsLixt7">Other Test Types of Interest</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch03.html#tools-and-processesandnbsp-LJsQUN">Tools and Processes&nbsp;</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch03.html#processes-for-quality-74sETdUg">Processes for quality</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch03.html#tools-for-quality-VOsNS9Ua">Tools for quality</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch03.html#wrapping-up-MysgIJ">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch04.html">Testing in Action</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch04.html#new-code-from-scratch-nEsEhO">New code from scratch</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch04.html#new-code-from-scratch-with-tdd-ZAsoTG">New code from scratch with TDD</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch04.html#untested-code-and-characterization-tests-7nszsw">Untested Code and Characterization Tests</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch04.html#debugging-and-regression-tests-0Rs7F6">Debugging and Regression Tests</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch04.html#wrapping-up-g5soi7">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch05.html">Basic Refactoring Goals</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch05.html#function-bulk-EQsYU0">Function Bulk</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch05.html#inputsandnbsp-3DsLSn">Inputs&nbsp;</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch05.html#outputs-kbsQcv">Outputs</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch05.html#side-effects-XKslsL">Side Effects</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch05.html#context-part-1-the-implicit-input-YKs5FY">Context Part 1: The Implicit Input</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch05.html#this-in-strict-mode-gMsKsPFA">this in strict mode</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch05.html#context-part-2-privacy-yPs0iX">Context Part 2: Privacy</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch05.html#is-there-privacy-in-javascript-0lsDxunie">Is there privacy in JavaScript?</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch05.html#wrapping-up-rbsBHe">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch06.html">Refactoring Simple Structures</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch06.html#the-code-dVsGhV">The Code</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch06.html#our-strategy-for-confidence-MRsKse">Our Strategy for Confidence</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch06.html#renaming-things-6osMFD">Renaming Things</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch06.html#useless-code-mRsyid">Useless Code</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch06.html#dead-code-1dsaIliP">Dead Code</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#speculative-code-and-comments-9ZsMumir">Speculative Code and Comments</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#whitespace-P0sncein">Whitespace</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#do-nothing-code-n3sQS9in">Do Nothing Code</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#debugginglogging-statements-GMsGtliz">Debugging/Logging Statements</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch06.html#variables-jgs3Hn">Variables</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch06.html#magic-numbers-1dsof1HP">Magic Numbers</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#long-lines-part-1-9ZskI9Hr">Long Lines: Part 1</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#inlining-function-calls-VZsPu1HP">Inlining Function Calls</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#introducing-a-variable-P0spTRHn">Introducing a Variable</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#variable-hoisting-n3sBcmHn">Variable Hoisting</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch06.html#strings-qYsjCb">Strings</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch06.html#concatenating-magic-and-template-strings-9ZsZfqCr">Concatenating, Magic, and Template Strings</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#regex-basics-for-handling-strings-VZsoIlCP">Regex Basics For Handling Strings</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#long-lines-part-2-strings-n3sZTLCn">Long Lines: Part 2 (Strings)</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch06.html#working-with-arrays-loops-foreach-map-ekspUb">Working with Arrays: Loops, forEach, map</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch06.html#long-lines-part-3-arrays-lRsKSOUK">Long Lines: Part 3 (Arrays)</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#which-loop-to-choose-YMsBtvUv">Which Loop To Choose?</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch06.html#better-than-loops-ZPsgh3UL">Better than Loops</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch06.html#wrapping-up-1dsVfj">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch07.html">Refactoring Functions and Objects</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch07.html#the-code-improved-Kqs9TN">The Code (Improved)</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch07.html#array-and-object-alternatives-OXsEu8">Array And Object Alternatives</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch07.html#array-alternative-sets-xbszhMum">Array Alternative: Sets</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#array-alternative-objects-Y0sAUvuB">Array Alternative: Objects</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#object-alternative-maps-lds9cBub">Object Alternative: Maps</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#array-alternative-bit-fields-v9sMTWuY">Array Alternative: Bit Fields</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch07.html#testing-what-we-have-8GsKS8">Testing What We Have</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch07.html#our-setup-test-basKuLSn">Our Setup Test</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#characterization-tests-for-classify-VDsRSWSj">Characterization Tests for classify</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#testing-the-welcomemessage-00snsKSd">Testing the welcomeMessage</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#testing-for-labelprobabilities-JXs2F8So">Testing for labelProbabilities</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch07.html#extracting-functions-z1sdsg">Extracting Functions</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch07.html#getting-away-from-procedural-code-Y0sEH8sB">Getting Away from Procedural Code</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#extracting-and-naming-anonymous-functions-v9sGUKsY">Extracting and Naming Anonymous Functions</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#function-calls-and-function-literals-pNsYTas7">Function Calls and Function Literals</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch07.html#streamlining-the-api-with-one-global-object-xbsOF6">Streamlining the API with one global object</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch07.html#extracting-the-classifier-object-andnbspandnbsp-00sJu1Fd">Extracting the classifier Object &nbsp;&nbsp;</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#inlining-the-setup-functionandnbsp-37sdsEF0">Inlining the setup Function&nbsp;</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#extracting-the-songlist-object-ZDs8iOFM">Extracting the songList Object</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#handling-the-remaining-global-variables-AZszIvFQ">Handling the Remaining Global Variables</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#making-data-independent-from-the-program-wbs7HkFl">Making Data Independent from the Program</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#scoping-declarations-var-let-and-const-q2s1hqFL">Scoping Declarations: var, let, and const</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#bringing-classify-into-the-classifier-QXsPUAF4">Bringing classify into the classifier</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#untangling-coupled-values-RXs3cJFO">Untangling Coupled Values</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#objects-with-duplicate-information-7MsVtoFg">Objects With Duplicate Information</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#bringing-the-other-functions-and-variables-into-classifier-PXs8u6FX">Bringing the Other Functions and Variables into classifier</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#arrow-syntax-and-shorthand-function-syntax-dGsASpFA">Arrow Syntax and Shorthand Function Syntax</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#getting-new-objects-with-constructor-functions-adsksOFD">Getting new Objects with Constructor Functions</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#constructor-functions-vs-factory-functions-MQsDF7Fa">Constructor Functions vs. Factory Functions</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#a-class-for-our-classifier-GZsGi0Fm">A class for our Classifier</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#choosing-our-api-2ksJIVF3">Choosing Our API</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#time-for-a-little-privacy-BZs6HWFX">Time for a Little Privacy?</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch07.html#adapting-the-classifier-to-a-new-problem-domain-4PsAUlFX">Adapting the Classifier to a New Problem Domain</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch07.html#wrapping-up-Y0soiq">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch08.html">Refactoring within a Hierarchy</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch08.html#about-crud-apps-and-frameworks-8rsKS0">About "CRUD apps" and Frameworks</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch08.html#lets-build-a-hierarchy-Gqs1fQ">Let's Build a Hierarchy</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch08.html#lets-wreck-our-hierarchy-ZZsYc6">Let's wreck our Hierarchy</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch08.html#constructor-functions-0KsmSocz">Constructor Functions</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch08.html#object-literals-mnsATQcj">Object Literals</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch08.html#factory-functions-E1spf0cd">Factory Functions</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch08.html#inheritance-and-architecture-dGsOhR">Inheritance And Architecture</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch08.html#why-do-some-people-hate-classes-68s9IWhA">Why Do Some People Hate Classes?</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch08.html#what-about-multiple-inheritance-lKsmCphz">What About Multiple Inheritance?</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch08.html#which-interfaces-do-you-want-rKsQuph6">Which Interfaces do you want?</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch08.html#has-a-relationships-D1sGIn">Has-A Relationships</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch08.html#inheritance-antipatterns-0KsqC8">Inheritance Antipatterns</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch08.html#hyperextension-4Rs0fKCR">Hyperextension</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch08.html#goat-and-cabbage-raised-by-a-wolf-68sbcYCA">Goat and Cabbage Raised By a Wolf</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch08.html#wrapping-up-mnsKum">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch09.html">Refactoring to OOP Patterns</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch09.html#template-method-OqsKT9">Template Method</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch09.html#a-functional-variant-26sbtKTR">A Functional Variant</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch09.html#strategy-arsDs9">Strategy</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch09.html#state-BMs4FN">State</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch09.html#null-object-v2sXi1">Null Object</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch09.html#wrapper-decorator-and-adapter-pasQH0">Wrapper (Decorator and Adapter)</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch09.html#facade-zKsKtE">Facade</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch09.html#wrapping-up-w4s1SZ">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch10.html">Asynchronous Refactoring</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch10.html#why-async-M0umTv">Why Async?</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch10.html#fixing-the-pyramid-of-doom-leuQsW">Fixing The Pyramid of Doom</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch10.html#extracting-functions-into-a-containing-object-5VudIksZ">Extracting Functions into a Containing Object</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch10.html#testing-our-asynchronous-program-q3uXsxs6">Testing our Asynchronous Program</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch10.html#additional-testing-considerations-AQuAtzsD">Additional Testing Considerations</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch10.html#callbacks-and-testing-eQupha">Callbacks and Testing</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch10.html#basic-cps-and-ioc-43uRhDhM">Basic CPS and IoC</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch10.html#callback-style-testing-2JubCkhA">Callback Style Testing</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch10.html#promises-azuLC1">Promises</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch10.html#the-basic-promise-interface-Ynu5IMC0">The Basic Promise Interface</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch10.html#creating-and-using-promises-Lbu8s4CZ">Creating and Using Promises</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch10.html#testing-promises-43uKtoCM">Testing Promises</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch10.html#wrapping-up-5VuecJ">Wrapping up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch11.html">Functional Refactoring</a>
+            <ol>
+  <li data-type="sect1">
+    <a href="ch11.html#the-restrictions-and-benefits-of-functional-programming-xYuofr">The Restrictions and Benefits of Functional Programming</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch11.html#restrictions-GPuLHvfN">Restrictions</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#benefits-mruVtxf9">Benefits</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#the-future-maybe-of-functional-programming-aOuehefQ">The Future (maybe) of Functional Programming</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch11.html#the-basics-wrurUr">The Basics</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch11.html#avoiding-destructive-actions-mutation-and-reassignment-mrueHdU9">Avoiding Destructive Actions, Mutation, and Reassignment</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#dont-return-null-aOuVtAUQ">Don't return null</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#referential-transparency-and-avoiding-state-Q8ulhyU3">Referential Transparency and Avoiding State</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#handling-randomness-LRugT8UG">Handling Randomness</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#keeping-the-impure-at-bay-7xu4IZUd">Keeping the Impure at Bay</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch11.html#advanced-basics-mru3F6">Advanced Basics</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch11.html#currying-and-partial-application-with-ramdajs-7xuxSoFd">Currying and Partial Application (with Ramda.js)</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#function-composition-JDuVTOFZ">Function Composition</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#types-the-bare-minimum-KOu9IVFg">Types: The Bare Minimum</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch11.html#burritos-aOuDi9">Burritos</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch11.html#introducing-sanctuaryjs-vVu4s1ix">Introducing Sanctuary.js</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#the-null-object-pattern-revisited-0auEC9iV">The Null Object Pattern, Revisited!</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#functional-refactoring-with-maybe-b9uzHvi9">Functional Refactoring with Maybe</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#functional-refactoring-with-either-Vduztgi2">Functional Refactoring with Either</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch11.html#learning-and-using-burritos-Q8uZsj">Learning and Using Burritos</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch11.html#moving-from-oop-to-fp-LRu3HR">Moving from OOP to FP</a>
+            <ol>
+  <li data-type="sect2">
+    <a href="ch11.html#return-of-the-naive-bayes-classifier-KOuRtbHg">Return of the Naive Bayes Classifier</a>
+  </li>
+  <li data-type="sect2">
+    <a href="ch11.html#on-rewrites-yEuKhRHe">On Rewrites</a>
+  </li>
+</ol>
+      </li>
+  <li data-type="sect1">
+    <a href="ch11.html#wrapping-up-7xuotE">Wrapping Up</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+      </li>
+  <li data-type="chapter">
+    <a href="ch12.html">Conclusion</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="appendix">
+    <a href="appa.html">Further Reading and Resources</a>
+            <ol>
+</ol>
+      </li>
+  <li data-type="index">
+    <a href="ix.html">Index</a>
+            <ol>
+</ol>
+      </li>
+</ol>
+</nav>
+
+  </body>
+</html>

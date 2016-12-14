@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <section data-type="chapter" id="refactoring-to-oop-patterns-mZps9">
+<h1>Refactoring to OOP Patterns</h1>
+
+<p>It is tempting to treat software design patterns as a checklist to learn. There's something so nice about the idea that if we just "memorize those 23 things," we'll be all set. The bad news is that, as we talked about in Chapter 2, even learning the latest in JavaScript should keep you busy until the free and open web fails or the sun goes supernova.</p>
+
+<p>Additionally, patterns have a mixed reputation. On the one hand, they can help to handle complexity. On the other hand they can <em>create</em> complexity where it is not needed. Sometimes, extracting functions, extracting objects, breaking code up into modules, and depending on a framework (which itself likely exposes and documents patterns of its own) are simpler choices. Keeping the YAGNI ("you ain't gonna need it") principle in mind and considering the interface you want for your code are the best guidelines when deciding when to implement (or remove) a design pattern.</p>
+
+<p>The good news is that these patterns aren't that hard to learn and are easy to reference so you don't have to memorize every detail. Additionally, there's only 7 of them here, chosen by their likelihood to solve real problems in legacy code. Just learn these 7 things, and it will change your life!* Here they are:</p>
+
+<ul>
+	<li>Template Method</li>
+	<li>Strategy</li>
+	<li>State</li>
+	<li>Null Object</li>
+	<li>Decorator (Wrapper Section)</li>
+	<li>Adapter (Wrapper Section)</li>
+	<li>Facade</li>
+</ul>
+
+<p>As we're describing fairly high-level changes for most of these patterns, it's likely that the specific interfaces will change. With that, we should be aware that when changing an interface, we might not be "refactoring." Sometimes, patterns are presented with "mechanics" to provide a safe path between code before and after a pattern is applied. In lieu of those, the practical steps for applying <em>every</em> pattern presented are:</p>
+
+<ol>
+	<li>Save and check the code into version control.</li>
+	<li>Make a small change.</li>
+	<li>Repeat step 1 and 2 until you're done.</li>
+</ol>
+
+<p>Follow that process, and write tests as you see fit. We've explored a few ways to do that earlier, including: Test-Driven Development (TDD), characterization tests, end-to-end tests, and unit tests.</p>
+
+<p>We are striving for code we can be confident in. That means in additional to code being well tested, it should also provide sensible interfaces. That is the priority in this chapter.</p>
+
+<p>*<em>disclaimer: life changes may be somewhat subtle</em></p>
+
+<section data-type="sect1" id="template-method-OqsKT9">
+<h1>Template Method</h1>
+
+<p>The template method pattern is useful for when you have two algorithms that serve the same purpose, with minor variations. The basic mechanic requires moving some part of two subclass functions into the parent class.</p>
+
+<p>Although the refactoring itself is fairly simple, through this section, we'll talk about how you might get to the point of wanting it, as well as what you might do instead.</p>
+
+<p>Let's say you have a <code>Person</code> class. As the saying goes, there are 10 types of people: Those who understand binary numbers, and those who don't. To start out, our person manages this knowledge in a boolean type variable:</p>
+
+<pre data-type="programlisting">
+class Person{
+  constructor(binaryKnower){
+    this.binaryKnower = binaryKnower;
+  }
+&nbsp; whatIs(number){ return number };
+&nbsp; whatIsInBinary(number){ return Number('0b' + number) };
+};
+
+const personOne = new Person(true);
+const personTwo = new Person(false);
+
+[personOne, personTwo].forEach(person =&gt; {
+&nbsp; if(person.binaryKnower){
+&nbsp;&nbsp;&nbsp; console.log(person.whatIsInBinary(10));
+&nbsp; } else{
+&nbsp;&nbsp;&nbsp; console.log(person.whatIs(10));
+&nbsp; }
+});</pre>
+
+<p>Our <code>personOne</code> knows binary, so we'll get <code>2</code> logged first. Our <code>personTwo</code> just assumes that <em>one, zero</em> is <code>10</code>, so that's logged second.</p>
+
+<p>This works fine, but it leaves our interrogation of binary knowledge up to our client code. Consequently, we're stuck with an <code>if</code> statement any time we want to get all of our people to interpret a number. Generally speaking, we want to eliminate conditionals where it is sensible and also push complexity away from the API (which you might think of as "the public interface," the inputs and outputs for the tests", or "the way we use the code"). It's generally better if we can let the deeper parts of the code handle complexity.</p>
+
+<p>Let's move that conditional into the <code>Person</code> object, and while we're at it, let's use a string for binary knowledge instead of a boolean:</p>
+
+<pre data-type="programlisting">
+class Person{
+  constructor(typeOfPerson){
+    this.typeOfPerson = typeOfPerson;
+  }
+&nbsp; whatIs(number){
+&nbsp;&nbsp;&nbsp; return number;
+&nbsp; };
+&nbsp; whatIsInBinary(number){
+&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp; };
+  log(number){
+  &nbsp; if(this.typeOfPerson === "binary knower"){
+  &nbsp;&nbsp;&nbsp; console.log(this.whatIsInBinary(10));
+&nbsp;   } else{
+&nbsp;&nbsp;&nbsp;   console.log(this.whatIs(10));
+&nbsp;   }
+&nbsp;&nbsp;};
+};
+
+const personOne = new Person("binary knower");
+const personTwo = new Person("binary oblivious");
+
+[personOne, personTwo].forEach(person =&gt; {person.log(10)});</pre>
+
+<p>Now our conditional is neatly tucked away in the <code>log</code> function of the <code>Person</code> object. Next, instead of just having a type variable to let the logging function know what to do, let's use subclasses and get rid of the conditional altogether:</p>
+
+<pre data-type="programlisting">
+class Person{}
+
+class BinaryKnower extends Person{
+&nbsp;&nbsp;log(number){
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(this.whatIsInBinary(number));
+&nbsp;&nbsp;};
+&nbsp; whatIsInBinary(number){
+&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp; };
+};
+
+class BinaryOblivious extends Person{
+&nbsp;&nbsp;log(number){
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(this.whatIs(number));
+&nbsp;&nbsp;};
+&nbsp; whatIs(number){
+&nbsp;&nbsp;&nbsp; return number;
+&nbsp; }
+};
+const personOne = new BinaryKnower();
+const personTwo = new BinaryOblivious();
+[personOne, personTwo].forEach(person =&gt; person.log(10));
+</pre>
+
+<p>Now our <code>log</code> function is looking a little repetitive. Let's bring it into the <code>Person</code> object:</p>
+
+
+<pre data-type="programlisting">
+class Person{
+&nbsp;&nbsp;log(number){
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(this.whatIs(number));
+&nbsp;&nbsp;};
+};
+
+class BinaryKnower extends Person{
+&nbsp; whatIs(number){ return Number('0b' + number) };
+};
+
+class BinaryOblivious extends Person{
+&nbsp; whatIs(number){ return number };
+};
+const personOne = new BinaryKnower();
+const personTwo = new BinaryOblivious();
+[personOne, personTwo].forEach(person =&gt; person.log(10));
+
+</pre>
+
+<p>Notice that we had to make our functions (<code>whatIs</code> and <code>whatIsInBinary</code>) named the same thing to make that change.</p>
+
+<div data-type="note" id="when-did-we-apply-the-template-method-pattern-K4IpHgTK"><h6>Note</h6>
+<h1>When did we apply the template method pattern?</h1>
+
+<p>In case it's unclear, it was in this last step of moving the <code>log</code> function from the subclasses into <code>Person</code>.&nbsp;</p>
+</div>
+
+<section data-type="sect2" id="a-functional-variant-26sbtKTR">
+<h2>A Functional Variant</h2>
+
+<p>For a function as basic as this, you might wonder if it justifies the superclass. We could have also done this:</p>
+
+<pre data-type="programlisting">
+function log(person, number){ 
+  console.log(person.whatIs(number));
+};
+class BinaryKnower{ whatIs(number){ return Number('0b' + number) } };
+class BinaryOblivious{ whatIs(number){ return number } };
+const personOne = new BinaryKnower();
+const personTwo = new BinaryOblivious();
+[personOne, personTwo].forEach(person =&gt; { log(person, 10) });</pre>
+
+<p>Now we're passing two <em>explicit</em> arguments to the function, and must explicitly reference the <code>personObject</code>, rather than <code>this</code>. In the other code snippet, we had one <em>implicit</em> parameter and one <em>explicit</em> one. You might prefer either approach, but making a choice is important as it sets a tone for two futures for the code base. Objects help to group and namespace functions, but there is additional complexity in sharing functions between objects.</p>
+
+<p>If you're tending towards an object-oriented code base, what we had before is preferable. If your code base is intended to be functional, you would probably opt for this, keeping in mind that the scope of the function must be kept small (likely through creating modules) in order to prevent name collisions. Additionally, you might also wonder if the <code>BinaryKnower</code> and <code>BinaryOblivious</code> classes are needed. It is easy to make the case against them if they only contain one function.</p>
+
+<pre data-type="programlisting">
+function log(fun, number){ 
+  console.log(fun(number));
+};
+function whatIsInBinary(number){return Number('0b' + number)};
+function whatIs(number){return number } ;
+
+[whatIsInBinary, whatIs].forEach(fun =&gt; { log(fun, 10) });</pre>
+
+<p>Presumably, in a real application, we'd have a bit more to our <code>Person</code> objects, which may justify using a class or at least an object rather than just the function as we did here. However, it's also entirely possible to organize your code as a series of functions and return values. Look for opportunities to do both.</p>
+</section>
+
+<p>Since this chapter is primarily for the purpose of illustrating object-oriented patterns, we'll ignore the functional variant for now.</p>
+</section>
+
+<section data-type="sect1" id="strategy-arsDs9">
+<h1>Strategy</h1>
+
+<p>The Template Method pattern allowed us to remove a conditional through subclassing. The Strategy pattern allows us to remove the subclasses by attaching a strategy (function) to the parent object.</p>
+
+<p>Let's take a look at what we have now:</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp;&nbsp;log(number){
+&nbsp;&nbsp;&nbsp;&nbsp;console.log(this.whatIs(number));
+&nbsp;&nbsp;};
+};
+
+class BinaryKnower extends Person{
+&nbsp; whatIs(number){ return Number('0b' + number) };
+};
+
+class BinaryOblivious extends Person{
+&nbsp; whatIs(number){ return number };
+};
+
+const personOne = new BinaryKnower();
+const personTwo = new BinaryOblivious();
+[personOne, personTwo].forEach(person =&gt; person.log(10));
+</pre>
+
+<p>As we took a critical eye to the <code>Person</code> class in the last section, now let's consider whether we need the subclasses. We could avoid them by setting a type value in the constructor and recreating the conditional in the <code>whatIs</code> function that we had earlier in the "test" code (logging output):</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(knowsBinary){
+&nbsp;&nbsp;&nbsp; this.knowsBinary = knowsBinary;
+&nbsp; }
+&nbsp; log(number){
+&nbsp;&nbsp;&nbsp; console.log(this.whatIs(number));
+&nbsp; }
+&nbsp; whatIs(number){
+&nbsp;&nbsp;&nbsp; if(this.knowsBinary){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp;&nbsp;&nbsp; } else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return number;
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }
+};
+
+const personOne = new Person(true);
+const personTwo = new Person(false);
+
+[personOne, personTwo].forEach(person =&gt; { person.log(10) });
+</pre>
+
+<p>We could eliminate this type check by adding functions to our person objects after they are created:</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; log(number){
+&nbsp;&nbsp;&nbsp; console.log(this.whatIs(number));
+&nbsp; }
+};
+
+const personOne = new Person( );
+personOne.whatIs = (number) =&gt; Number('0b' + number);
+const personTwo = new Person(number =&gt; number);
+personTwo.whatIs = (number) =&gt; number;
+
+[personOne, personTwo].forEach(person =&gt; { person.log(10) });
+</pre>
+
+<p>Alternatively, we can eliminate the type check by supplementing the object with a function on construction:</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(whatIs){
+&nbsp;&nbsp;&nbsp; this.whatIs = whatIs;
+&nbsp; }
+&nbsp; log(number){
+&nbsp;&nbsp;&nbsp; console.log(this.whatIs(number));
+&nbsp; }
+};
+
+const personOne = new Person(number =&gt; Number('0b' + number));
+const personTwo = new Person(number =&gt; number);
+
+[personOne, personTwo].forEach(person =&gt; { person.log(10) });
+</pre>
+
+<p>If we wanted, we could name and extract these functions to simplify the constructor:</p>
+
+<pre data-type="programlisting">
+function binaryAware(number){
+&nbsp; return Number('0b' + number);
+};
+function binaryOblivious(number){
+&nbsp; return number;
+};
+
+const personOne = new Person(binaryAware);
+const personTwo = new Person(binaryOblivious);
+</pre>
+
+<p>Now that the functions are extracted, we can easily test them independently and without creating any <code>Person</code> objects.</p>
+
+<p>You might be tempted to move these functions into the <code>Person</code> object, possibly as static functions like this:</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(whatIs){
+&nbsp;&nbsp;&nbsp; this.whatIs = whatIs;
+&nbsp; }
+&nbsp; log(number){
+&nbsp;&nbsp;&nbsp; console.log(this.whatIs(number));
+&nbsp; }
+&nbsp; static binaryAware(number){
+&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp; }
+&nbsp; static binaryOblivious(number){
+&nbsp;&nbsp;&nbsp; return number;
+&nbsp; }
+};
+
+const personOne = new Person(Person.binaryAware);
+const personTwo = new Person(Person.binaryOblivious);
+</pre>
+
+<p>However, this is a level of coupling between the person ("context") and binary awareness ("strategy") that we'd like to avoid. <em>Binary awareness</em> is potentially a strategy we'd like to give to other objects (eg. Dolphins, Androids, and Aliens) later, so it's best to keep them separate.</p>
+
+<p>Instead of that coupling, we can create a new object that contains the strategies, making the full code listing the following:</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(whatIs){
+&nbsp;&nbsp;&nbsp; this.whatIs = whatIs;
+&nbsp; }
+&nbsp; log(number){
+&nbsp;&nbsp;&nbsp; console.log(this.whatIs(number));
+&nbsp; }
+};
+
+const binary = {
+&nbsp; aware(number){
+&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp; },
+&nbsp; oblivious(number){
+&nbsp;&nbsp;&nbsp; return number;
+&nbsp; }
+};
+
+const personOne = new Person(binary.aware);
+const personTwo = new Person(binary.oblivious);
+
+[personOne, personTwo].forEach(person =&gt; { person.log(10) });
+</pre>
+
+<p>Now our strategies are neatly tucked away in an object, which we pass to our <code>new Person</code> constructor. This is convenient, because if we create a new function representing a different interpretation of a number (say, octal or hexadecimal), it won't require a whole new subclass.</p>
+
+<p>You might notice that our "functional variant" from the template method section applies here as well. If we're willing to drop objects and classes, we have a different (and usually shorter) type of code.</p>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="state-BMs4FN">
+<h1>State</h1>
+
+<p>The state pattern is a bit more involved than the strategy pattern, but can flow naturally from it. Let's assume that awareness of binary actually indicates knowledge of binary operations, <code>read</code>, <code>and</code>, and <code>xor</code> (exclusive or) as well. There are other binary operations, but three are sufficient to demonstrate the pattern. To continue to use the strategy pattern for this case, we would need to expand our constructor to include all of the new knowledge strategies.</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(readKnowledge, andKnowledge, xorKnowledge){
+&nbsp;&nbsp;&nbsp; this.read = readKnowledge;
+&nbsp;&nbsp;&nbsp; this.and = andKnowledge;
+&nbsp;&nbsp;&nbsp; this.xor = xorKnowledge;
+&nbsp; }
+};
+
+const binary = {
+&nbsp; readAware(number){
+&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp; },
+&nbsp; readOblivious(number){
+&nbsp;&nbsp;&nbsp; return number;
+&nbsp; },
+&nbsp; andAware(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return numberOne &amp; numberTwo;
+&nbsp; },
+&nbsp; andOblivious(numberOne, numberTwo){
+&nbsp;&nbsp; return "unknown";
+&nbsp; },
+&nbsp; xorAware(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return numberOne ^ numberTwo;
+&nbsp; },
+&nbsp; xorOblivious(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return "unknown";
+&nbsp; }
+};
+
+const personOne = new Person(binary.readAware, 
+                             binary.andAware,
+                             binary.xorAware);
+const personTwo = new Person(binary.readOblivious,
+                             binary.andOblivious,
+                             binary.xorOblivious);
+
+[personOne, personTwo].forEach(person =&gt; {
+&nbsp; console.log(person.read(10));
+&nbsp; console.log(person.and(2, 3));
+&nbsp; console.log(person.xor(2, 3));
+});
+</pre>
+
+<p>This expansion of the strategy pattern can get messy quickly. The easiest remedy to that is to allow two objects to contain all of the "obliviousness" or "awareness" of binary:</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(binaryKnowledge){
+&nbsp;&nbsp;&nbsp; this.binaryKnowledge = binaryKnowledge;
+&nbsp; }
+};
+
+const binaryAwareness = {
+&nbsp; read(number){
+&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp; },
+&nbsp; and(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return numberOne &amp; numberTwo;
+&nbsp; },
+&nbsp; xor(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return numberOne ^ numberTwo;
+&nbsp; }
+};
+
+const binaryObliviousness = {
+&nbsp; read(number){
+&nbsp;&nbsp;&nbsp; return number;
+&nbsp; },
+&nbsp; and(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return "unknown";
+&nbsp; },
+&nbsp; xor(number){
+&nbsp;&nbsp;&nbsp; return "unknown";
+&nbsp; }
+};
+
+const personOne = new Person(binaryAwareness);
+const personTwo = new Person(binaryObliviousness);
+
+[personOne, personTwo].forEach(person =&gt; {
+&nbsp; console.log(person.binaryKnowledge.read(10));
+&nbsp; console.log(person.binaryKnowledge.and(2, 3));
+&nbsp; console.log(person.binaryKnowledge.xor(2, 3));
+});
+</pre>
+
+<p>This simplifies the constructor calls and allows the <code>binaryKnowledge</code> to be independent of the <code>person</code>. Before we move on to fully implementing the state pattern, there are two additional possibilities worth consideration. The first is a potential shortcoming of all three functions being contained in the same knowledge objects. Is it possible for a person to know how to <code>read</code> binary, but not execute a <code>xor</code> operation? Sure, why not? This design doesn't offer a flexible approach to that situation, but we'll address that after completing the state pattern.</p>
+
+<p>A second thing to consider is whether or not to add delegation from the <code>person</code> object directly to the <code>binaryKnowledge</code> functions, allowing for an interface like <code>person.read</code> or <code>person.xor</code>. There is a possible convenience in that, but it also has weaknesses. Tying those functions together in the constructor (using statements like <code>this.read = binaryKnowledge.read</code>) would mean any new functions added to the <code>binaryKnowledge</code> objects would also need new references in the <code>Person</code> constructor. Additionally, the client code then masks the interfaces of the <code>binaryKnowledge</code> objects. To delegate or not is going to come down to a matter of taste, but in general, the more dynamic and complex the delegate objects (<code>binaryKnowledge</code> in this case), the more overhead and confusion you will have when delegating individual functions.</p>
+
+<div data-type="warning" id="the-binary-objects-functions-can-be-changed-8qIrUDFN"><h6>Warning</h6>
+<h1>The binary object's functions can be changed!</h1>
+
+<p>Although it's convenient to attach objects directly to other objects like this, it is worth considering that although <code>const</code> will protect the value of <code>binary</code> from being reassigned, it does not prevent our <code>aware</code> or <code>oblivious</code> functions from being reassigned. Furthermore, if multiple <code>person</code> objects may reference the same function, redefining a function on a given <code>person</code> object will redefine the function for other objects as well. Adding the following code to the end should demonstrate this:</p>
+
+<pre data-type="programlisting">
+const personOne = new Person(binaryAwareness);
+const personTwo = new Person(binaryAwareness);
+personTwo.binaryKnowledge.read = () =&gt; 'redefined on both objects';
+
+[personOne, personTwo].forEach(person =&gt; {
+&nbsp; console.log(person.binaryKnowledge.read(10));
+});
+</pre>
+
+<p>The easiest path to having <em>immutable</em> objects is to have <em>new</em> objects. We'll address this toward the end of this section.</p>
+</div>
+
+<p>What makes this not quite yet the state pattern is that we haven't defined the transitions between our objects.</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(binaryKnowledge){
+&nbsp;&nbsp;&nbsp; this.binaryKnowledge = binaryKnowledge;
+&nbsp; };
+&nbsp; change(binaryKnowledge){
+&nbsp;&nbsp;&nbsp; this.binaryKnowledge = binaryKnowledge;
+&nbsp; };
+};
+
+const binaryAwareness = {
+&nbsp; read(number){
+&nbsp;&nbsp;&nbsp; return Number('0b' + number);
+&nbsp; },
+&nbsp; and(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return numberOne &amp; numberTwo;
+&nbsp; },
+&nbsp; xor(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return numberOne ^ numberTwo;
+&nbsp; },
+&nbsp; forget(person){
+&nbsp;&nbsp;&nbsp; person.change(binaryObliviousness);
+&nbsp; }
+}
+const binaryObliviousness = {
+&nbsp; read(number){
+&nbsp;&nbsp;&nbsp; return number;
+&nbsp; },
+&nbsp; and(numberOne, numberTwo){
+&nbsp;&nbsp;&nbsp; return "unknown";
+&nbsp; },
+&nbsp; xor(number){
+&nbsp;&nbsp;&nbsp; return "unknown";
+&nbsp; },
+&nbsp; learn(person){
+&nbsp;&nbsp;&nbsp; person.change(binaryAwareness);
+&nbsp; }
+};
+
+const personOne = new Person(binaryAwareness);
+const personTwo = new Person(binaryObliviousness);
+
+[personOne, personTwo].forEach(person =&gt; {
+&nbsp; console.log(person.binaryKnowledge.read(10));
+&nbsp; console.log(person.binaryKnowledge.and(2, 3));
+&nbsp; console.log(person.binaryKnowledge.xor(2, 3));
+});
+
+personOne.binaryKnowledge.forget(personOne);
+personTwo.binaryKnowledge.learn(personTwo);
+
+[personOne, personTwo].forEach(person =&gt; {
+&nbsp; console.log(person.binaryKnowledge.read(10));
+&nbsp; console.log(person.binaryKnowledge.and(2, 3));
+&nbsp; console.log(person.binaryKnowledge.xor(2, 3));
+});
+</pre>
+
+<p>This requires one new function (<code>change</code>) to be defined on <code>Person</code>, as well as a <code>forget</code> function defined on <code>binaryAwareness</code> and a <code>learn</code> function defined on <code>binaryObliviousness</code>. For our tests (just logging statements) we flip the binary knowledge states of our two <code>person</code> objects and should see the output reversed when it prints the second time.</p>
+
+<p>There are two things about this code that are suspect. First, it is awkward to pass a <code>person</code> object into the <code>forget</code> and <code>learn</code> functions. Second, as the warning text previously indicated, our <code>binaryKnowledge</code> objects are not safe from being redefined.</p>
+
+<p>The second problem could be addressed by making factory functions, constructor functions or classes that would return our <code>binaryKnowledge</code> objects. However, a simpler solution is just to wrap our assignment to <code>binaryKnowledge</code> in the <code>Person constructor</code> with an <code>Object.create</code>. To make our change function safe, we can wrap it as well:</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(binaryKnowledge){
+&nbsp;&nbsp;&nbsp; this.binaryKnowledge = Object.create(binaryKnowledge);
+&nbsp; };
+&nbsp; change(binaryKnowledge){
+&nbsp;&nbsp;&nbsp; this.binaryKnowledge = Object.create(binaryKnowledge);
+&nbsp; };
+};
+</pre>
+
+<p>To solve the first problem (the awkwardness of duplicating our references to <code>person</code> in the <code>learn</code> and <code>forget</code> functions), we first have to use <code>Object.assign</code> in the person constructor to give our our <code>binaryKnowledge</code> a link back to the <code>person</code> object. Then we can remove the parameters from <code>forget</code> and <code>learn</code>, and change the references to that parameter to instead use <code>this.person</code>.</p>
+
+<p>Alternatively, we could define both <code>forget</code> and <code>learn</code> on the <code>Person</code> class (the original design pattern does not specify where transitions are defined), but as with the question raised earlier about delegating functions to <code>Person</code>, the same idea applies now: If we add information about states to <code>Person</code>, then <code>Person</code> becomes more complex and less focused. That said, it may be worth it in some cases in order to centralize transition information.</p>
+
+<pre data-type="programlisting">
+class Person{
+&nbsp; constructor(binaryKnowledge){
+&nbsp;&nbsp;&nbsp; this.binaryKnowledge = Object.create(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Object.assign(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {person: this},
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; binaryKnowledge));
+&nbsp; };
+&nbsp; change(binaryKnowledge){
+&nbsp;&nbsp;&nbsp; this.binaryKnowledge = Object.create(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Object.assign(
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {person: this},
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; binaryKnowledge));
+&nbsp; };
+};
+
+const binaryAwareness = {
+...
+&nbsp; forget(){
+&nbsp;&nbsp;&nbsp; this.person.change(binaryObliviousness);
+&nbsp; }
+}
+const binaryObliviousness = {
+...
+&nbsp; learn(){
+&nbsp;&nbsp;&nbsp; this.person.change(binaryAwareness);
+&nbsp; }
+};
+
+const personOne = new Person(binaryAwareness);
+const personTwo = new Person(binaryObliviousness);
+
+...
+
+personTwo.binaryKnowledge.forget();
+personTwo.binaryKnowledge.read = () =&gt; 'will not assign both';
+[personOne, personTwo].forEach(person =&gt; {
+&nbsp; console.log(person.binaryKnowledge.read(3));
+});
+</pre>
+
+<p>The last five lines of this code snippet should confirm that the new reference to <code>read</code> stays within its own object and <code>forget</code> (as well as <code>learn</code>) no longer require an explicit argument for <code>person</code>.</p>
+
+<aside data-type="sidebar" id="state-pattern-vs-state-machine-NxHbuXFO">
+<h5>State Pattern vs. State Machine</h5>
+
+<p>There is a bit of crossover between the state <em>pattern</em> and the state <em>machine</em>. Although it is a related idea, state machines tend to focus on the states themselves, and transitions between them, rather than providing a unified interface for common functions. Although you <em>gain</em> some simplicity by the virtue of just one class/object controlling all of your states and transitions (and typically callback functions to execute during transitions as well), you <em>lose</em> the simplicity of a unified interface while in any given state. That means more type checking (if statements), and is a likely place for complexity to attach itself over time.</p>
+</aside>
+
+<p>And now, some unfortunate news about the state pattern.</p>
+
+<p>Here, we had a fairly simple example of the state pattern, because we only have two states. Although it scales fairly well, "refactoring to use a state pattern" just for the sake of removing conditional checks is fairly aggressive once a code base has headed down the path of lots and lots of type checking (whether with or without a state machine in place). And adding a lot of new objects/classes (one for each state) might not be a popular idea among your teammates.</p>
+
+<p>You can also encounter problems if your states are complex. Picture a branching structure where "knowing xor" is a substate of "knowing binary" which is a substate of "knowing math" which is a substate of "understanding the universe." If your states branch out like that, you'll be overwhelmed with classes/objects very quickly. Put another way, it's possible that your states may have nothing to do with one another. Do you make a state for every combination of "knowing binary," "knowing English," and "having a pet?" Do you introduce another full-blown state pattern implementation for each independent type of state? Hopefully, the answer is "no," and simplicity wins over competing types of states for one type of object.</p>
+
+<p>One final thing that the classical state pattern comes with is some contract that a certain <em>interface</em> is <em>implemented</em> by each state class/object. We have made no guarantee in our usage. In JavaScript, without compile-time checks for such contracts, we have a couple of options. We could use assertions inside of constructors for our states or our context (<code>Person</code>). We could create a <code>BaseState</code> object that contains stubs of functions (and possibly throws an error if they are not overwritten). Or we could do nothing to enforce that type of contract. Given our options, this isn't that bad. We'll get "<code>TypeError: someObject.whatever is not a function</code>" errors, which is probably as descriptive as any error we would throw in the <code>BaseState</code> or an <code>AssertionError</code> we would get from failed assertions in the constructors. Another option is using a language that compiles to JavaScript and has these features (like TypeScript). Hopefully the appeals to simplicity in this chapter make it clear that it is not advisable to rewrite your entire program in a different language and complicate your build process for the sake of fully realizing a design pattern.</p>
+
+<p>In the next section, we'll look at a different option for avoiding TypeErrors when calling functions and ReferenceErrors when attempting to use <code>null</code> values.</p>
+</section>
+
+<section data-type="sect1" id="null-object-v2sXi1">
+<h1>Null Object</h1>
+
+<p>Although not part of the original 23 patterns defined in "Design Patterns: Elements of Reusable Object-Oriented Software," this pattern is probably the most underused of all. Consider how many conditional checks in your code are executed against <code>null</code>, <code>undefined</code>, or the existence of a particular variable or function. Odds are that type of checking makes up a large portion of your <code>if</code> statements and worse, the absence of those type checks likely makes up a large portion of your errors.</p>
+
+<aside data-type="sidebar" id="a-non-value-not-even-a-father-couldnt-love-WrH5cWiB">
+<h5>A (Non-)Value Not Even A Father Couldn't Love</h5>
+
+<p>Tony Hoare invented the Null Reference in 1965. In 2009, he called it his "billion- dollar mistake" because of all the damage it has caused. Considering not only run-time errors, but all of the extra time coding type checks for <code>null</code> values across every language that has implemented it, a billion dollars is probably an understatement.</p>
+
+<p>In fact, according to <a href="http://insight.jbs.cam.ac.uk/2013/research-by-cambridge-mbas-for-tech-firm-undo-finds-software-bugs-cost-the-industry-316-billion-a-year/">research</a> from Cambridge University in 2013 (admittedly sponsored by a bug-hunting software vendor), bugs cost the world $316 billion dollars every year. Surely, not all of those derive from improper handling of null conditions, but from my personal experience with web applications, I would guess that it makes up a significant portion. If I was hard pressed for a percentage, I'd estimate somewhere around half, assuming no static typing tools are in place. It's certainly more than 1 in 316, and we're talking about <em>annually</em> here.</p>
+
+<p>His career is a distinguished one, so this is not brought up to criticize him. The point is that "null is a billion-dollar mistake" is not common enough knowledge for people to avoid using it. It (and <code>undefined</code>) didn't make Crockford's list of "Bad Parts," and it is returned by so many APIs in so many libraries.</p>
+</aside>
+
+<p>Let's start with something that might return <code>null</code>:</p>
+
+<pre data-type="programlisting">
+class Person {
+&nbsp; constructor(name){
+&nbsp;&nbsp;&nbsp; this.name = name;
+&nbsp; }
+};
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = null;
+&nbsp; }
+};
+
+personOne = new Person("tony");
+personTwo = new AnonymousPerson("tony");
+console.log(personOne.name);
+console.log(personTwo.name);
+</pre>
+
+<p>One unfortunate distraction in this code is the call to <code>super</code> in constructor of the subclass. If you don't call super, you'll get a&nbsp;<code>ReferenceError: this is not defined</code>, which is not only an unclear error, but also demonstrates how <code>null</code> or <code>undefined</code> can come from core parts of the language, not just libraries.</p>
+
+<p>Anyways, the output doesn't look so bad:</p>
+
+<pre data-type="programlisting">
+tony&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;
+null
+</pre>
+
+<p>But let's say we want to do something with those values:</p>
+
+<pre data-type="programlisting">
+function capitalize(string) {
+&nbsp; return string[0].toUpperCase() + string.substring(1);
+};
+
+console.log(capitalize(personOne.name));
+console.log(capitalize(personTwo.name));
+</pre>
+
+<p>Now our trouble starts with:</p>
+
+<pre data-type="programlisting">
+TypeError: Cannot read property '0' of null</pre>
+
+<p>We might be inclined to try to solve this by using an empty string instead of <code>null</code>.</p>
+
+<pre data-type="programlisting">
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = "";
+&nbsp; }
+};
+</pre>
+
+<p>This time, we'll get a new error:</p>
+
+<pre data-type="programlisting">
+TypeError: Cannot read property 'toUpperCase' of undefined
+</pre>
+
+<p>It's just as bad as the first one, so we might as well put our <code>null</code> back. Now we're stuck doing some type checking inside of <code>capitalize</code>:</p>
+
+<pre data-type="programlisting">
+function capitalize(string) {
+&nbsp; if(string === null){
+&nbsp;&nbsp;&nbsp; return null;
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return string[0].toUpperCase() + string.substring(1)
+&nbsp; }
+};
+</pre>
+
+<p>Because we didn't have a good way out of the empty value we got from the <code>AnonymousPerson</code> <code>name</code> property (we're pretending we don't know about null objects) we're stuck with some kind of nonsensical type check like this (it could just as easily be <code>""</code> or<code> undefined</code>). And the consequence for <em>not</em> type checking is that our program will throw an error at run-time.</p>
+
+<p>So what do we do if the string is <code>null</code>? We might as well return another <code>null</code>. Now say we want to <em>tigerify</em> our tonys:</p>
+
+<pre data-type="programlisting">
+function tigerify(string) {
+&nbsp; return `${string}, the tiger`;
+};
+console.log(tigerify(capitalize(personOne.name)));
+console.log(tigerify(capitalize(personTwo.name)));</pre>
+
+<p>Now our output is:</p>
+
+<pre data-type="programlisting">
+Tony, the tiger&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;
+null, the tiger</pre>
+
+<p>Well, it's not an error, but that's not a value we want to display:</p>
+
+<pre data-type="programlisting">
+function tigerify(string) {
+&nbsp; if(string === null){
+&nbsp;&nbsp;&nbsp; return null;
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return `${string}, the tiger`;
+&nbsp; }
+};
+</pre>
+
+<p>Now we'll get just plain null for the string, which isn't really a better value to display than before. We don't <em>really</em> want to make our <code>tigerify</code> function responsible for the final output (it's nice to have <code>capitalize</code> and <code>tigerify</code> both have the same interface as we can call both in either order, or one without the other), so let's create a <code>display</code> function to handle the finalized output:</p>
+
+<pre data-type="programlisting">
+function display(string){
+&nbsp; if(string === null){
+&nbsp;&nbsp;&nbsp; return '';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return string;
+&nbsp; }
+};
+;
+</pre>
+
+<p>Another <code>null</code> check so that we can display a blank string.</p>
+
+<aside data-type="sidebar" id="but-no-one-would-actually-display-null-right-ZrHwH3ia">
+<h5>But no one would actually display null, right?</h5>
+
+<p>Yeah they would. I'm not going to say what website I saw this on, but they have over 40 million in funding. Also, they created the <code>null</code> here, not me.</p>
+
+<figure id="id-bBUec2H7id"><img alt="" class="inullpng" src="null.png">
+<figcaption><span class="label">Figure 9-1. </span>A display of null in the wild.</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/null.png">&nbsp;null.png</a></p>
+</aside>
+
+<p>Hopefully, the anti-pattern is becoming clear: either check for <code>null</code>, or submit people to errors and other awkward interactions. It takes one <code>null</code> to kick of a code-base full of conditional checks and sadness. Not only does every function that calls something that could return a <code>null</code> value likely <em>need</em> a null check, but your tests are necessarily more complex as well, because any functions you test will have at least two branches.</p>
+
+<p>Ok. So how do we fix it? The answer is we start treating our names like objects, rather than strings and nulls. Then we can begin to implement functions that have a mirror interface.</p>
+
+<pre data-type="programlisting">
+class Person {
+&nbsp; constructor(name){
+&nbsp;&nbsp;&nbsp; this.name = new NameString(name);
+&nbsp; }
+};
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = new NullString;
+&nbsp; }
+};
+
+class NullString{
+&nbsp; capitalize(){
+&nbsp;&nbsp;&nbsp; return null;
+&nbsp; }
+};
+
+class NameString extends String{
+&nbsp; capitalize() {
+&nbsp;&nbsp;&nbsp; return new NameString(this[0].toUpperCase() + this.substring(1));
+&nbsp; };
+&nbsp; tigerify() {
+&nbsp;&nbsp;&nbsp; if(this === null){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return null;
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return new NameString(`${this}, the tiger`);
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+&nbsp; display(){
+&nbsp;&nbsp;&nbsp; if(this === null){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return '';
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return this.toString();
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+}
+
+personOne = new Person("tony");
+personTwo = new AnonymousPerson("tony");
+console.log(personOne.name.capitalize().tigerify().display());
+console.log(personTwo.name.capitalize());
+</pre>
+
+<p>The biggest change here is the addition of two new objects: the <code>NameString</code> and the <code>NullString</code>. The constructors of <code>Person</code> and <code>AnonymousPerson</code> create these objects. Notice that we're now chaining functions instead of nesting them and that <code>display</code> now calls <code>toString</code> so that <code>console</code> doesn't print the type information. <code>NameString</code> implements our functions as before (except for the type check we could remove from <code>capitalize</code>, but <code>NullString</code> only has <code>capitalize</code> implemented right now.</p>
+
+<p>Why is that?</p>
+
+<p>Because the traditional way to implement the NullObject pattern is to return <code>null</code>. We hit the <code>null</code>-wall and can't do anything else with <code>personTwo</code> without type checking. It's worth stopping there for a minute to think about how unfortunate that option is. Ok. Now let's do something better. We'll implement a <code>NullString</code> that not only has mirror functions, but also returns mirror values to the <code>NameString</code>.</p>
+
+<div data-type="note" id="why-didnt-we-just-overwrite-stringprototype-QrIKU2ip"><h6>Note</h6>
+<h1>Why Didn't We Just Overwrite String.prototype?</h1>
+
+<p>Overwriting base objects is considered a likely bad idea unless your sure that the changes are desirable for some scope that's easy to contain. Most of the time, other programmers (also you after you forgot that you overwrote parts of String) will assume that it is the same String that they're used to. Although subclassing is usually worse than other options for extracting an object, it is very useful for creating copies of native objects like <code>String</code>, <code>Array</code>, and other native types.</p>
+</div>
+
+<p>So what does our code look like with mirror interfaces:</p>
+
+<pre data-type="programlisting">
+// with null object
+class Person {
+&nbsp; constructor(name){
+&nbsp;&nbsp;&nbsp; this.name = new NameString(name);
+&nbsp; }
+};
+
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = new NullString;
+&nbsp; }
+};
+
+class NullString{
+&nbsp; capitalize(){
+&nbsp;&nbsp;&nbsp; return this; // same as new NullString in this case
+&nbsp; };
+&nbsp; tigerify() {
+&nbsp;&nbsp;&nbsp; return this; // same as new NullString in this case
+&nbsp; };
+&nbsp; display() {
+&nbsp;&nbsp;&nbsp; return '';
+&nbsp; };
+};
+
+class NameString extends String{
+&nbsp; capitalize() {
+&nbsp;&nbsp;&nbsp; return new NameString(this[0].toUpperCase() + this.substring(1));
+&nbsp; };
+&nbsp; tigerify() {
+&nbsp;&nbsp;&nbsp; return new NameString(`${this}, the tiger`);
+&nbsp; };
+&nbsp; display(){
+&nbsp;&nbsp;&nbsp; return this.toString();
+&nbsp; };
+}
+
+personOne = new Person("tony");
+personTwo = new AnonymousPerson("tony");
+console.log(personOne.name.capitalize().tigerify().display());
+console.log(personTwo.name.capitalize().tigerify().display());
+</pre>
+
+<p>Some people claim that this is more complicated than the equivalent version. Let's look at the other for reference:</p>
+
+<pre data-type="programlisting">
+// without null object
+class Person {
+&nbsp; constructor(name){
+&nbsp;&nbsp;&nbsp; this.name = name;
+&nbsp; }
+};
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = null;
+&nbsp; }
+};
+function capitalize(string) {
+&nbsp; if(string === null){
+&nbsp;&nbsp;&nbsp; return null;
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return string[0].toUpperCase() + string.substring(1);
+&nbsp; }
+};
+function tigerify(string) {
+&nbsp; if(string === null){
+&nbsp;&nbsp;&nbsp; return null;
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return `${string}, the tiger`;
+&nbsp; }
+};
+function display(string){
+&nbsp; if(string === null){
+&nbsp;&nbsp;&nbsp; return '';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return string;
+&nbsp; }
+};
+personOne = new Person("tony");
+personTwo = new AnonymousPerson("tony");
+console.log(display(tigerify(capitalize(personOne.name))));
+console.log(display(tigerify(capitalize(personTwo.name))));
+</pre>
+
+<p>It's actually the same amount of lines. Is it better to have a conditional in every function or to have two functions in different classes? Now that we see them side by side, let's talk about the pros and cons to using the null object pattern:</p>
+
+<p>Pros:</p>
+
+<ul>
+	<li>You can use console.log and actually find out something about your values.</li>
+	<li>You can do anything you want in the function body.</li>
+	<li>You can have the null object inherit and override functions (from <code>NameString</code>).</li>
+	<li>It's very easy to forget to do a null check. Having a complete API to duplicate may seem more straightforward to you.</li>
+</ul>
+
+<p>Cons:</p>
+
+<ul>
+	<li>You might have the classes in two separate files by convention creating overhead in searching the project.</li>
+	<li>You might buck convention of separating them by having them in the same file. This also creates overhead in searching the project.</li>
+	<li>You might have teammates who don't like the idea of null objects, not understand the idea of null objects, or just don't care about null objects (this is the case with pretty much every pattern or quality concern in general).</li>
+	<li>Since null (and undefined) are so commonly returned, your code base is unlikely to be completely <code>null</code>/<code>undefined</code> free. That means you will probably end up with inconsistencies and some confusion from people unfamiliar with the patterns you implement.</li>
+	<li>Because returning <code>null</code>/<code>undefined</code> is so common, if you want consistent expectations for not returning <code>null</code>/<code>undefined</code>, you'll likely need to adapt a lot of your codebase as well as 3rd party APIs.</li>
+	<li>You have to implement a function on the null object every time you create a new function call that might call the null object instead of its mirrored real one. Since it's likely that you'd have to add and possibly forget a null check (if you're not using null objects, I think this one is a wash.</li>
+	<li>You can't insist that 3rd party code follows sane practices for returning real values. If you're stuck with a library that returns the billion dollar mistake, you'll need to wrap that interface with a new functionality, which could be confusing to people used to working with the basic interface.</li>
+	<li>You might want different null object functions depending on the eventual context of how the value will be used. Will it be saved to the database? Logged? Used to create a new value? These all suggest different terminal functionality (such as our <code>display</code> function).</li>
+	<li>When working with native object types such as strings and arrays, there is overhead to extending them to build subclasses to mirror the null objects.</li>
+</ul>
+
+<p>Overall, in <em>application</em> development, the null object pattern provides an alternative to <code>null</code> checks (and the errors caused when you forget to check for <code>null</code>). If you're writing a <em>library, framework, or module</em> however, it is worth considering this pattern in order to avoid "null poisoning" the code bases of anyone who uses your code.</p>
+
+<p>If you're trying to avoid all of the subclasses involved in this pattern, you can try combining this pattern with the techniques presented in the sections for the state and strategy patterns. Also, in the Chapter 11, we'll look at a functional alternative to the null object pattern called "Maybe." As for the next section, we'll double down on the null object pattern by combining it with a wrapper.</p>
+</section>
+
+<section data-type="sect1" id="wrapper-decorator-and-adapter-pasQH0">
+<h1>Wrapper (Decorator and Adapter)</h1>
+
+<p>There are a few ways to implement the decorator pattern. One thing that should not be surprising based on earlier sections in this chapter is that JavaScript does not naturally fit in well with "Interfaces," "Abstract Classes," and other object-oriented language features that tend to be a part of the classical pattern.</p>
+
+<p>Before moving on, install tape with <strong><code>npm install tape</code></strong>. It's a lighter weight test framework than mocha. We'll use it again in Chapter 9.</p>
+
+<p>Most of the time for the decorator pattern, you'll see an example like this:</p>
+
+<pre data-type="programlisting">
+class Dog{
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this.cost = 50;
+&nbsp; }
+&nbsp; displayPrice(){
+&nbsp;&nbsp;&nbsp; return `The dog costs $${this.cost}.`;
+&nbsp; }
+};
+
+const test = require('tape');
+test("base dog price", (assert) =&gt; {
+&nbsp; assert.equal((new Dog).displayPrice(), 'The dog costs $50.');
+&nbsp; assert.end();
+});
+</pre>
+
+<div data-type="warning" id="this-is-not-the-same-assert-as-before-8qIdhrHN"><h6>Warning</h6>
+<h1>This is not the same <code>assert</code> as before</h1>
+
+<p>Tape has a special callback parameter that has an assertion syntax built in. It's also responsible for ending the test and counting the test cases. If we use a different assertion library in tape, we have to add an extra <code>assert.pass()</code> line, which is awkward:</p>
+
+<pre data-type="programlisting">
+const test = require('tape');
+const wish = require('wish');
+test("base dog price", (assert) =&gt; {
+&nbsp; wish((new Dog).displayPrice() === 'The dog costs $50.');
+&nbsp; assert.pass();
+&nbsp; assert.end();
+});
+</pre>
+
+<p>If we don't add that line, the tests won't <em>fail</em>, but tape won't count them as <em>passing</em> or even <em>tests</em>(!) in its output. We'll stick with tape's assert in this chapter.</p>
+</div>
+
+<p>The decorator is useful in a couple cases. First, it's good if we're pulling the dog class in from a module we don't own and don't want to (or can't) manipulate it directly. Second, it's good to keep us from a sprawling mass of subclasses. To illustrate that second point, consider if our price was based on whether the dog was cute, trained, robotic, friendly, or a show dog. All of those traits could affect the price, but they are not mutually exclusive, so comprehensive subclassing would have to collect every attribute, (eg. <code>class FriendlyNotCuteTrainedNonRoboticNonShowDog extends Dog</code>).</p>
+
+<p>To extend decorate the dog with a particular trait, we can add a factory function that takes a dog as input:</p>
+
+<pre data-type="programlisting">
+function Cute(dog){
+&nbsp; const cuteDog = Object.create(dog);
+&nbsp; cuteDog.cost = dog.cost + 20;
+&nbsp; return cuteDog;
+};
+
+test("cute dog price", (assert) =&gt; {
+&nbsp; assert.equal((Cute(new Dog)).displayPrice(), 'The dog costs $70.');
+&nbsp; assert.end();
+});
+</pre>
+
+<p>Adding another trait is as simple as adding a new factory function:</p>
+
+<pre data-type="programlisting">
+function Trained(dog){
+&nbsp; const trainedDog = Object.create(dog);
+&nbsp; trainedDog.cost = dog.cost + 60;
+&nbsp; return trainedDog;
+};
+test("trained/cute dog price", (assert) =&gt; {
+&nbsp; assert.equal(Trained(Cute(new Dog)).displayPrice(),
+               'The dog costs $130.');
+&nbsp; assert.end();
+});
+</pre>
+
+<p>We can add new decorators like this quite easily.</p>
+
+<div data-type="note" id="do-we-have-to-nest-the-factory-functions-1pIwFeHa"><h6>Note</h6>
+<h1>Do We Have To Nest The Factory Functions?</h1>
+
+<p>You might be wondering if we could get away with an interface like this instead:</p>
+
+<pre data-type="programlisting">
+(new Dog).Cute().Trained();</pre>
+
+<p>The answer is "yes, we abosolutely <em>could</em> do that." However, can we do that without adding new functionality to the original class? No. One major point of this pattern is that we either <em>can't</em> or <em>don't want to</em> alter the original class.</p>
+</div>
+
+<p>The "cost of something" decorator focuses on adding traits to an existing interface. In other cases, we want to adapt an interface by applying another wrapper. Let's try addressing the problem of an API that returns nulls, "billion dollar mistakes" that they are (see the previous section if you need some background on null objects). Here is some code similar to what we looked at in the previous section:</p>
+
+<pre data-type="programlisting">
+class Person {
+&nbsp; constructor(name){
+&nbsp;&nbsp;&nbsp; this.name = new NameString(name);
+&nbsp; }
+};
+
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = null;
+&nbsp; }
+};
+
+class NameString extends String{
+&nbsp; capitalize() {
+&nbsp;&nbsp;&nbsp; return new NameString(this[0].toUpperCase() + this.substring(1));
+&nbsp; };
+&nbsp; tigerify() {
+&nbsp;&nbsp;&nbsp; return new NameString(`${this}, the tiger`);
+&nbsp; };
+&nbsp; display(){
+&nbsp;&nbsp;&nbsp; return this.toString();
+&nbsp; };
+};
+
+const test = require('tape');
+
+test("Displaying a person", (assert) =&gt; {
+&nbsp; const personOne = new Person("tony");
+&nbsp; assert.equal(personOne.name.capitalize().tigerify().display(),
+               'Tony, the tiger');
+&nbsp; assert.end();
+});
+</pre>
+
+<p>This works fine, but if we want to test <code>AnonymousPerson</code> objects, we're stuck handling the null checks in our our test. To be explicit, if we try this:</p>
+
+<pre data-type="programlisting">
+test("Displaying an anonymous person", (assert) =&gt; {
+&nbsp; const personTwo = new AnonymousPerson("tony");
+&nbsp; assert.equal(personTwo.name.capitalize().tigerify().display(),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '');
+&nbsp; assert.end();
+});
+</pre>
+
+<p>We'll quickly hit this error:</p>
+
+<pre data-type="programlisting">
+TypeError: Cannot read property 'capitalize' of null</pre>
+
+<p>In our null object example from the last section, we dealt with this by allowing <code>AnonymousPerson</code> to return a <code>NullString</code> for name and then added some functions to <code>NullString</code>. What's stopping us from having a consistent interface is adding the following code:</p>
+
+<pre data-type="programlisting">
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = new NullString; // This line is the problem
+&nbsp; }
+};
+class NullString{
+&nbsp; capitalize(){
+&nbsp;&nbsp;&nbsp; return this;
+&nbsp; };
+&nbsp; tigerify() {
+&nbsp;&nbsp;&nbsp; return this;
+&nbsp; };
+&nbsp; display() {
+&nbsp;&nbsp;&nbsp; return '';
+&nbsp; };
+};
+</pre>
+
+<p>We have no problem adding the <code>NullString</code> class. However, we're treating <code>AnonymousPerson</code> as untouchable for the sake of applying this decorator pattern.</p>
+
+<p>With what we need to add, our code becomes the following:</p>
+
+<pre data-type="programlisting">
+class Person {
+&nbsp; constructor(name){
+&nbsp;&nbsp;&nbsp; this.name = new NameString(name);
+&nbsp; }
+};
+
+class AnonymousPerson extends Person {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; super();
+&nbsp;&nbsp;&nbsp; this.name = null;
+&nbsp; }
+};
+
+class NameString extends String{
+&nbsp; capitalize() {
+&nbsp;&nbsp;&nbsp; return new NameString(this[0].toUpperCase() + this.substring(1));
+&nbsp; };
+&nbsp; tigerify() {
+&nbsp;&nbsp;&nbsp; return new NameString(`${this}, the tiger`);
+&nbsp; };
+&nbsp; display(){
+&nbsp;&nbsp;&nbsp; return this.toString();
+&nbsp; };
+};
+
+class NullString{
+&nbsp; capitalize(){
+&nbsp;&nbsp;&nbsp; return this;
+&nbsp; };
+&nbsp; tigerify() {
+&nbsp;&nbsp;&nbsp; return this;
+&nbsp; };
+&nbsp; display() {
+&nbsp;&nbsp;&nbsp; return '';
+&nbsp; };
+};
+
+function WithoutNull(person){
+&nbsp; personWithoutNull = Object.create(person);
+&nbsp; if(personWithoutNull.name === null){
+&nbsp;&nbsp;&nbsp; personWithoutNull.name = new NullString;
+&nbsp; };
+&nbsp; return personWithoutNull;
+}
+
+const test = require('tape');
+
+test("Displaying a person", (assert) =&gt; {
+&nbsp; const personOne = new Person("tony");
+&nbsp; assert.equal(personOne.name.capitalize().tigerify().display(),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'Tony, the tiger');
+&nbsp; assert.end();
+});
+test("Displaying an anonymous person", (assert) =&gt; {
+&nbsp; const personTwo = new AnonymousPerson("tony");
+&nbsp; assert.equal(WithoutNull(personTwo)
+               .name.capitalize().tigerify().display(),
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '');
+&nbsp; assert.end();
+});
+</pre>
+
+<p>And both tests pass. We just had to add the <code>WithoutNull</code> function and use it to wrap <code>personTwo</code>. All it does is prevent <code>name</code> from being <code>null</code>. Because it does not convert the <code>name</code> <em>unless</em> it is <code>null</code>, we can happily wrap <em>any</em> person object with <code>WithoutNull</code>, anonymous or not. Notice that we use a simple factory function that returns an object, but we could have used a class or constructor function as well. The disadvantage of those approaches is that they implicitly return an object, and here, it's easier to explicitly return a new one that we construct manually. With a class or constructor function, the implicitly returned class would be of type <code>WithoutNull</code>, which is odd, and overriding it (returning a different object in the constructor function of the class or from a constructor function called with new) reads as a bit confusing.</p>
+
+<p>Two other things are worth considering here. First, it is not always the case that we would be able to decide what type of person object we had. It's possible that we'd only have one type of <code>Person</code> and we would not be able to determine ahead of time whether or not it had a <code>name</code> (or any other attributes that we might wrap with <code>WithoutNull</code>). For example, we might be receiving objects from the database with a function like <code>(db.get({person: {id: 17}}))</code>. Our <code>WithoutNull</code> wrapper would be excellent for providing a consistent interface to name and other attributes just by wrapping the call like this: <code>withoutNull(db.get({person: {id: 17}}))</code>. It's very likely that we would not want to change the database API itself, but rather, wrap values that it returns.</p>
+
+<p>Second, if our API returned a string instead of a real object for <code>name</code> in the normal <code>Person</code> case (rather than a <code>NameString</code>), we would have had much more difficulty in setting up a parallel function structure for <code>NullString</code> without directly extending our "untouchable" <code>Person</code> and <code>AnonymousPerson</code> classes, overwriting <code>String.prototype</code>, or compromising our fairly simple wrapping API.</p>
+
+<p>We've seen two possible interfaces so far:</p>
+
+<pre data-type="programlisting">
+Cute(dog);
+WithoutNull(personTwo);
+</pre>
+
+<p>As we noted earlier, we could have used a class/constructor function instead of a factory function, which would give us an interface like:</p>
+
+<pre data-type="programlisting">
+new Cute(dog);
+new WithoutNull(personTwo);</pre>
+
+<p>The reason we didn't do that is that it is odd to explicitly return a something from a constructor function (which carries the expectation of returning the type of object named by the constructor or class).</p>
+
+<p>From the perspective of an interface, what is a <em>new Cute</em>? What is a <em>new WithoutNull</em>? These are traits, and don't really make sense to instantiate. So it's not only the implementation, but also the interface that suggests a factory function.</p>
+
+<p>For another take on this, let's look at a very simple adapter that uses a class.</p>
+
+<pre data-type="programlisting">
+class Target{
+&nbsp; hello(){
+&nbsp;&nbsp;&nbsp; console.log('hello');
+&nbsp; };
+&nbsp; goodbye(){
+&nbsp;&nbsp;&nbsp; console.log('goodbye');
+&nbsp; };
+
+};
+class Adaptee{
+&nbsp; hi(){
+&nbsp;&nbsp;&nbsp; console.log('hi');
+&nbsp; };
+&nbsp; bye(){
+&nbsp;&nbsp;&nbsp; console.log('bye');
+&nbsp; };
+};
+
+const formal = new Target;
+formal.hello();
+formal.goodbye();
+
+const casual = new Adaptee;
+casual.hi();
+casual.bye();
+
+class Adapter{
+&nbsp; constructor(adaptee){
+&nbsp;&nbsp;&nbsp; this.hello = adaptee.hi;
+&nbsp;&nbsp;&nbsp; this.goodbye = adaptee.bye;
+&nbsp; };
+};
+const adaptedCasual = new Adapter(new Adaptee);
+adaptedCasual.hello();
+adaptedCasual.goodbye();
+</pre>
+
+<p>So we have <code>casual</code> and <code>formal</code> objects with different interfaces (<code>hi</code> vs. <code>hello</code> and <code>bye</code> vs. <code>goodbye</code>). If we need to support the same interface, the <code>Adapter</code> can remap the functions to new ones. This is the same problem that <code>WithNull</code> helped us solve earlier.</p>
+
+<p>For the same reasons as with the decorators, <code>Adapter</code> would probably be best as a factory function. But if we use a factory function for the Adapter, what is difference between an adapter and a decorator?</p>
+
+<p>The difference is emphasis and likely usage. A decorator is more likely to have nested wrappers to add a few disparate traits. An adapter is more of a mapping of interfaces between one object and another. Imagining our <code>WithNull</code> implementing a conversion of every property to not allow for <code>null</code>. In a decorator scenario, we might prefer to nest as in <code>WithoutNullName(WithoutNullPhone(person)))</code>. For an adapter, we would be more likely to apply the interface transformation as a necessary and single step. So the dog example was probably more of a decorator, while the without null example was more of an adapter. But does it matter? Not really. In all cases, we're using wrapper functions to add properties to objects. It's tempting to think of patterns in terms of "interfaces" (the OOP term) and "abstract classes," subclasses and private/public methods and members, but JavaScript isn't Java. UML diagrams to describe these complex relationships can be a useful starting point for design, but for JavaScript, your best option is to start with the interface (the test/client code) you want to write and then figure out how to implement it.</p>
+
+<p>When should we avoid decorators and adapters? Well, if we have control over the entire implementation (we own our own libraries), we might get the same utility from altering the base code rather than complicating our interfaces with wrapping possibilities. Additionally, as with applying any pattern, ensure that the result is actually simpler and more understandable than the original (unpatterned) code. Before using the adapter function, first try extracting objects and functions. If you still want to apply the the pattern, this will probably just make the process easier.</p>
+</section>
+
+<section data-type="sect1" id="facade-zKsKtE">
+<h1>Facade</h1>
+
+<p>After the more challenging wrapper patterns, the facade is extremely simple. We have some complex API, but instead of interacting with it directly, we use an interface. When you play a piano, you're not physically pushing the hammers into the strings. When you drive a car, you're probably focused on the destination or next high-level step, occassionally thinking about your controls, and rarely if ever thinking about the internal components.&nbsp;</p>
+
+<p>Basically, a facade is an interface that contains a curated subset from one or more APIs with the intention of streamlining and simplifying the code one needs to write.</p>
+
+<p>As for a more specific software example, let's consider how JavaScript interacts with native web APIs. The amount of properties available on <code>document</code> and <code>window</code> alone is huge, and it can hardly be recommended that a beginner just read the documentation in order to get a handle on how it works.</p>
+
+<p>Let's create a facade that demonstrates the kinds of things you can do with JavaScript. Since we'll be interacting with a browser, we can start with an html page:</p>
+
+<pre data-type="programlisting">
+&lt;html&gt;
+&nbsp; &lt;head&gt;
+&nbsp;&nbsp;&nbsp; &lt;meta http-equiv="content-type" content="text/html; 
+     charset=utf-8" /&gt;
+&nbsp;&nbsp;&nbsp; &lt;title&gt;&lt;/title&gt;
+&nbsp;&nbsp;&nbsp; &lt;script type="text/javascript" src='facade.js'&gt;&lt;/script&gt;
+&nbsp; &lt;/head&gt;
+&nbsp; &lt;body&gt;
+&nbsp; &lt;/body&gt;
+&lt;/html&gt;
+</pre>
+
+<p>In the same directory, we can add a file for our facade.js:</p>
+
+<pre data-type="programlisting">
+const page = {
+&nbsp; say(string){
+&nbsp;&nbsp;&nbsp; console.log(string);
+&nbsp; },
+&nbsp; yell(string){
+&nbsp;&nbsp;&nbsp; alert(string);
+&nbsp; },
+&nbsp; addNewLine(){
+&nbsp;&nbsp;&nbsp; document.body.appendChild(document.createElement("br"));
+&nbsp; },
+
+&nbsp; addButton(text){
+&nbsp;&nbsp;&nbsp; const button = document.createElement("button");
+&nbsp;&nbsp;&nbsp; button.appendChild(document.createTextNode(text));
+&nbsp;&nbsp;&nbsp; document.body.appendChild(button);
+&nbsp; },
+&nbsp; addText(text){
+&nbsp;&nbsp;&nbsp; const span = document.createElement("span");
+&nbsp;&nbsp;&nbsp; span.appendChild(document.createTextNode(text));
+&nbsp;&nbsp;&nbsp; document.body.appendChild(span);
+&nbsp; },
+&nbsp; changeBackground(color){
+&nbsp;&nbsp;&nbsp; document.body.style.background = color;
+&nbsp; },
+&nbsp; now(asNumber = false){
+&nbsp;&nbsp;&nbsp; if(asNumber === false){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return new Date().toLocaleTimeString();
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return new Date().getTime();
+&nbsp;&nbsp;&nbsp; }
+&nbsp; },
+&nbsp; timeOnPage(){
+&nbsp;&nbsp;&nbsp; return ((this.now(true) - this._start) / 1000) + " seconds";
+&nbsp; },
+&nbsp; loadTime(){
+&nbsp;&nbsp;&nbsp; return ((this._start - this._loaded) / 1000) + " seconds";
+&nbsp; },
+&nbsp; eventsSoFar(){
+&nbsp;&nbsp;&nbsp; console.info(this._events);
+&nbsp; },
+&nbsp; _events: [],
+&nbsp; _start: 'nothing yet',
+&nbsp; _loaded: 'nothing yet'
+};
+
+window.onload = function(){
+&nbsp; page._start = page.now(true);
+&nbsp; page._loaded = performance.timing.navigationStart;
+&nbsp; document.onclick = function(event) {
+&nbsp;&nbsp;&nbsp; page._events.push(event.target + " clicked at " + page.now());
+&nbsp; };
+};
+</pre>
+
+<p>In this file, we're making the following functions available:</p>
+
+<ul>
+	<li><code>say</code> (console.log)</li>
+	<li><code>yell</code> (alert)</li>
+	<li><code>addNewLine</code> (adds br tag)</li>
+	<li><code>addButton</code> (adds a button)</li>
+	<li><code>addText</code> (adds a paragraph)</li>
+	<li><code>changeBackground</code> (changes background to a color)</li>
+	<li><code>now</code> (prints the current time, nicely formatted with default param)</li>
+	<li><code>timeOnPage</code> (how many seconds someone has been on the page)</li>
+	<li><code>loadTime</code> (how long it took the page to load)</li>
+	<li><code>eventsSoFar</code> (what the visitor has clicked on)</li>
+</ul>
+
+<p>We have a black box functions on an object called <code>page</code>. All it does is put together a limited subset of how you might interact with a website, including the basics of logging, analytics, page interactions, and performance monitoring. This could be useful for someone unfamiliar with browser APIs or the browser console.</p>
+
+<p>When should you not use a facade? Any time the direct interactions with an API are simple enough or understood well enough by you or other people interacting with it. In those cases, adding a facade is a bad idea, because it either will not be used, or used <em>sometimes</em>, leading to learning/supporting/understanding/maintaining two disparate interfaces.</p>
+
+<p>Facades are widely used for things like to simplify complex APIs. ORMs, "Object Relational Mappers" can be useful for simplifying database interactions. And jQuery is arguably a very large facade for front-end JavaScript and all the APIs it interacts with. Once you get to the ORM or framework level, you've got a lot more going on than a simple "facade," but the intention is the same.&nbsp;&nbsp;</p>
+
+<p>It is tempting to think of interfaces strictly in terms of public/private (which in JavaScript could mean prepended with <code>_</code>, completely hidden, or a couple of other things). However, exposing a smaller subset of an API is underutilized. Consider that we've already seen one clear example of why we might use a less feature rich API over a complex one (tape vs. mocha). Whether for convenience or learning, exposing a core/popular set of features independently from a large API could make documentation and coding easier on <em>beginners</em> (and "forgetters"), which, considering how massive the JavaScript landscape is, includes practically everyone.</p>
+
+<aside data-type="sidebar" id="what-does-the-alphabet-have-to-do-with-apis-oAHJH4tE">
+<h5>What does the alphabet have to do with APIs?</h5>
+
+<p>Even without creating a distinct, smaller interface for an API through a facade, people deserve better than documentation organized <em>only</em> alphabetically. What are the most useful functions? What are the most popular?</p>
+
+<p>These are not impossible questions to answer. By providing a subset of documentation or allowing functionality to be ranked by something more practical than the alphabet, advice to "RTFM" would be a lot more useful, albeit just as rude.</p>
+</aside>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect1" id="wrapping-up-w4s1SZ">
+<h1>Wrapping Up</h1>
+
+<p>We've left out the majority of patterns from the original Patterns book, as well as a good number of those that have popped up throughout the years. Since this is a refactoring book and not a patterns book, we had to draw the line somewhere, especially given that the term "pattern" is used as freely and casually as "refactoring" can be. Additionally, our goal is "turning bad (and likely to be seen) code into good code." Sometimes, there is simply not a plausable form that code could take as a "before" case. In other instances, applying a pattern is done for the sake of optimization, rather than to acheive a better interface. Another reason some patterns are not included is due them being built into the language.</p>
+
+<p>With those thoughts in mind, a few additonal patterns worth exploring are:</p>
+
+<ul>
+	<li>Composite: good for traversing trees of data, such as JSON/objects/document nodes</li>
+	<li>Builder: for complex object creation, good for generating test data</li>
+	<li>Observer: can be seen in things like pub/sub, events, and observables</li>
+	<li>Prototype: this is built into JavaScript</li>
+	<li>Iterators: building your own iterator is an unlikely choice given the wealth of native options options for iteration (including loops, array comprehension functions, and generators)</li>
+	<li>Proxy: We actually see an example of this in action in Chapter 9 when we use the "testdouble" framework, which allows "faking out" the real function call as well as asserting that the function was called. Note that there is also a native "Proxy Object" in JavaScript and it is another possible approach to wrapping an object with <code>withoutNull</code> as we covered earlier.</li>
+</ul>
+
+<p>The seminal design pattern book, "Design Patterns: Elements of Reusable Object-Oriented Software," also known as the "Gang of Four" or "GoF" book doesn't have a monopoly on design patterns, nor do object-oriented languages or web applications. In some languages or problem domains, a pattern might be very popular or easy to implement. JavaScript, given it spans so many paradigms and applications, has a large pool of architectural ideas to draw from. If you are looking for some new patterns to think about, embedded programming, operating systems, databases, concurrency, functional programming and game development might be of interest.</p>
+
+<p>In this chapter, we looked at some of the best that object oriented architecture has to offer, through a JavaScript lens. For the sake of refactoring, and in coding generally, the advice from GoF rings true to "program to an interface, not an implementation." Between (our) JavaScript's lack of a distinct compilation step and some keywords that didn't cross over from Java, SmallTalk, etc., this is not only practical advice, but the only possible approach for implementing many patterns.</p>
+
+<p>Ultimately, even if perfectly implementing UML diagrams from other languages was possible with JavaScript, the patterns presented in this chapter are instead intended to address likely architectural problems. Specifically, we addressed maintenance issues that arise with code complexity (exemplified by the proliferation of conditionals and subclasses), learned how to avoid "billion dollar mistakes" from external code, and provided an example of how to create a small, friendly API.</p>
+
+<p>In the next two chapters, we will be exploring JavaScript's more functional side.</p>
+</section>
+</section>
+
+  </body>
+</html>

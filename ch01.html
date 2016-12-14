@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <section data-type="chapter" id="what-is-refactoring-kObsx">
+<h1>What is Refactoring?</h1>
+
+<p>Refactoring is not changing code.</p>
+
+<p>Ok. Yes it is, but there's more to it. Refactoring is a type of changing code, but has one major constraint that makes "changing code" an imprecise way to describe it: You don't change the <em>behavior</em> of the code. Two immediate questions should come to mind:</p>
+
+<ol>
+	<li>How do you guarantee that behavior does not change?</li>
+	<li>What is the point of changing the code if the behavior doesn't change?</li>
+</ol>
+
+<p>In the rest of the chapter, we will pursue the answers to these questions. We're not going to go through the full history of JavaScript, as that's covered extensively on the web already.</p>
+
+<section data-type="sect1" id="how-can-you-guarantee-behavior-doesnt-change-lRsdS3">
+<h1>How can you guarantee behavior doesn't change?</h1>
+
+<p>Unqualified, the answer to that question is that it is incredibly hard. Fortunately, many types of behavior are not our primary concern when refactoring. We'll cover these next:</p>
+
+<ul>
+	<li>details of implementation</li>
+	<li>unspecified and untested behavior</li>
+	<li>performance</li>
+</ul>
+
+<p>The shorter answer for us, is using tests and version control.</p>
+
+<p>Another approach, supported by William Opdyke, whose thesis is the foundational work on refactoring, stresses using automated tools that are responsible for changing the code as well as guaranteeing safety <em>before</em> doing so. Professional coders might find that by removing the human element, the types of changes that can be made become limited, as the number of changes that are able to be guaranteed as "safe" is confined to the functionality of the tools.</p>
+
+<p>Writing tools to encompass the whole refactoring catalog proposed by Martin Fowler in his seminal book, "Refactoring: Improving the Design of Existing Code" would prove to be extremely difficult. And in JavaScript, a dynamic, multi-paradigmic language, with its ecosystem teeming with variants (see Chapter 2), these tools are bound to lag behind a refactorer's imagination even more so.</p>
+
+<p>Fowler's approach pulls away from automation, while at the same time stressing "mechanics" of the refactoring: steps of altering code that minimize unsafe states.</p>
+
+<p>If we relied on an "Opdykian," automated approach for this book, the tooling would hold us back significantly. And we're straying from Fowler's emphasis on mechanics (step-by-step processes) as well. The reason is that, as we move toward confidence in our code through a given refactoring, if it is backed up by tests, verifying the success of our changes should be straightforward. And when we fail to execute a refactoring properly, version control (we'll be using "git") should give us an easy way to simply "roll back" to the state of the code beforehand.</p>
+
+<div data-type="warning" id="warning-use-version-control-WecwClSE"><h6>Warning</h6>
+<h1>Warning! Use version control!</h1>
+
+<p>Any form of "changing code" carries significant risk to your code base if you cannot easily revert it to a previous, safe version. If you don't have versioned backups of the code base that you plan on "refactoring," put this book down and don't pick it up till you have your code under version control.</p>
+
+<p>If you're not using version control already, you probably want to use <a href="http://git-scm.com/">git</a>, and you probably want to back your work up on <a href="http://github.com">GitHub</a>.</p>
+</div>
+
+<p>Admittedly, the approach of this book might seem reactive and cavalier in comparison to the earlier paths of automation and mechanics. However, the process (the "red" failure state of a test, "green" passing state of a test, "refactor" cycle, with an eye on rolling back quickly if things go wrong) employed in this book is based upon how quality-focused teams operate with tools that are popular among them. Perhaps later, automated refactoring will catch up with Fowler's extensive catalog of refactorings, as well as all that are presented in this book, but I wouldn't count on it happening soon.</p>
+
+<p>Our goal here is to get JavaScript developers out of the muck. Although it is tempting to try to automate and mechanize that process, the most valuable parts of the work of the giants (Opdyke, Fowler, Johnson, et al.), whose shoulders this book humbly stands on, is that they gave us a new mindset around making code better and doing it safely.</p>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="why-dont-we-care-about-details-of-implementation-12sZF8Sr">
+<h2>Why don't we care about details of implementation?</h2>
+
+<p>Let's say we have a simple function that multiplies numbers by 2.</p>
+
+<pre data-type="programlisting">
+function byTwo(number){
+  return number * 2;
+}
+</pre>
+
+<p>We could instead write a function that accomplishes the same goal in a slightly different way.</p>
+
+<pre data-type="programlisting">
+function byTwo(number){
+  return number &lt;&lt; 1;
+}
+</pre>
+
+<p>And either of these will work fine for many applications. Any tests that we use for the <code>byTwo</code> function would basically just be a mapping between an input number, and an output number that is twice the value. But most of the time, we are more interested in the results, rather than whether the <code>*</code> or <code>&lt;&lt;</code> operators are used. We can think of this as an <em>implementation detail</em>. Although you could think of implementation details like this as <em>behavior</em>, it is behavior that is insignificant if all we care about is the input and output of a function.</p>
+
+<p>If we happened to use the second version of <code>byTwo</code> for some reason, we might find that it breaks when our <code>number</code> argument gets too large (try it with a trillion: <code>1000000000000 &lt;&lt; 1</code>). Does this mean we suddenly care about this implementation detail?</p>
+
+<p>No. We care that our output is broken. This means that our test suite needs to include more cases than we initially thought. And we can happily swap this implementation out for one that satisfies all of our test cases, whether that is <code>return number * 2</code> or <code>return number + number</code> is not our main concern.</p>
+
+<p>We changed the implementation details, but doubling our number is the behavior we care about. What we care about is also what we test (either manually or in an automated way). Testing the specifics is not only unnecessary in many cases, but it also will result in a code base that we can't refactor as freely.</p>
+
+<p>&nbsp;</p>
+
+<aside data-type="sidebar" id="testing-javascript-itself-QguJhyFLSK">
+<h5>Testing JavaScript Itself</h5>
+
+<p>If you are testing extremely specific implementation details, you will at some point no longer be testing your program, but rather the environment itself. We'll go over testing in detail later, but for now, you can run this either in a node console or saving to a file and running <strong><code>node <em>file_name.js</em></code></strong>. That said, it's not critical to do so at this point.</p>
+
+<p>Anyways, let's say that you're testing something like this:</p>
+
+<pre data-type="programlisting">
+assert = require('assert');
+assert(2 + 2 === 4);</pre>
+
+<p>By the way, that first line will produce some scary looking output if you're in a node console. Don't worry about that though, it's just showing what loaded. Also, the node console already has <code>assert</code>, so you can leave out the first line if you're not working from a .js file. Also, all the second line reports is <code>undefined</code>, which might seem weird. That's normal. Try asserting something untrue like <code>assert(3 === 2)</code> and you'll see an error.</p>
+
+<p>Anyways, if you make assertions like these, you're testing JavaScript itself: its numbers, <code>+</code> operator, and <code>===</code> operator. Similarly, and more frequently, you might find yourself testing libraries.</p>
+
+<pre data-type="programlisting">
+_ = require('underscore');
+assert(3 === _.first([3, 2]));</pre>
+
+<p>This is testing to see if underscore behaves as expected. Testing low-level implementation details like this is useful if you're exploring a new library or an unfamiliar part of JavaScript, but it's generally enough to rely on the tests that the packages themselves have (any good library would have its own tests). Two caveats to this are first, "sanity tests," which ensure that some function or library has been made available to your environment, although those tests need not stick around once you've stabilized your environment. The second is if you're writing tests to help be confident in the code (more on this later), testing a library's behavior demonstrates the code in action.</p>
+</aside>
+
+<p>&nbsp;</p>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="why-dont-we-care-about-unspecified-and-untested-behavior-GGszu9SB">
+<h2>Why don't we care about unspecified and untested behavior?</h2>
+
+<p>The degree to which we specify and test our code is literally the effort that demonstrates our care for its behavior. Not having a test, manual procedure for execution, or at least a description of how it should work means that the code is basically unverifiable.</p>
+
+<p>Let's assume that the following code has no supporting tests, documentation, or business processes that are described through it.</p>
+
+<pre data-type="programlisting">
+function doesThings(args, callback){
+&nbsp;&nbsp;doesOtherThings(args);
+  doesOtherOtherThings(args, callback);
+  return 5;
+};
+</pre>
+
+<p>Do we care if the behavior changes? Actually, yes! This function could be holding a lot of things together. Just because we can't understand it doesn't make it less important. However, it does make it much more dangerous.</p>
+
+<p>But in the context of refactoring, we don't care if this behavior changes yet, <strong>because we won't be refactoring it</strong>. When we have any code that lacks tests (or at least a documented way of executing it), we do <em>not</em> want to change this code. <strong>We can't refactor it</strong>, because we won't be able to verify that the behavior doesn't change. Later in the book, we'll cover creating "characterization tests" to deal with untested code.</p>
+
+<p>This situation isn't confined to legacy code either. New code that is untested is also not possible to refactor without tests, whether they are automated or manual.</p>
+
+<p>&nbsp;</p>
+
+<aside data-type="sidebar" id="how-conversations-about-refactoring-should-go-until-tests-are-written-QguVCBuLSK">
+<h5>How conversations about refactoring should go until tests are written.</h5>
+
+<p>"I refactored login to take email address and username"</p>
+
+<p>"No you didn't."</p>
+
+<p>"I'm refactoring the code to ____"</p>
+
+<p>"No you aren't."</p>
+
+<p>"Before we can add tests, we need to refactor."</p>
+
+<p>"No"</p>
+
+<p>"Refactoring th–"</p>
+
+<p>"No."</p>
+
+<p>"Refa–"</p>
+
+<p>"No."</p>
+</aside>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect2" id="why-dont-we-care-about-performance-wgsaUZS9">
+<h2>Why don't we care about performance?</h2>
+
+<p>As far as refactoring goes, we don't <em>initially</em> care about performance. Like our doubling function a couple of sections back, we care about our inputs delivering expected outputs. Most of the time, we can lean on the tools given to us and our first guess at an implementation will be <em>good enough</em>. The mantra here is to "write for humans first."</p>
+
+<p>Good enough for a first implementation means that we're able to, in a reasonable amount of time, determine that the inputs yield expected outputs. If our implementation does not allow for that because it takes too long, then we need to change the implementation. But by that time, we should have tests in place to verify inputs and outputs. When we have tests in place, then we have enough confidence to refactor our code and change the implementation. If we don't have those tests in place, we are putting behavior we really care about (the inputs and outputs) at risk.</p>
+
+<p>Although it is part of what is called <em>non-functional</em> tests, and generally not the focus of refactoring, we can prioritize performance characteristics (and other "non-functional" aspects of the code like usability) by making them falsifiable, just like the program's correctness. In other words, we can test for performance.</p>
+
+<p>Performance is privileged among "non-functional" aspects of a codebase by being relatively easy to elevate to a similar standard of correctness. By "benchmarking" our code, we can create tests that fail when performance (eg. of a function) is too slow, and pass when performance is acceptable. This is done by making the running of the function (or other process) itself the "input," and designating the time (or other resource) taken as the "output."</p>
+
+<p>However, until the performance is under some verifiable testing structure of this format, it would not be considered "behavior" that we are concerned about changing or not changing. If we have functional tests in place, we can adjust our implementations freely until we decide on some standard of performance. At that point, our test suite grows to encompass performance characteristics.</p>
+
+<p>So in the end, caring about performance (and other non-functional aspects) is a secondary concern until we decide to create expectations and tests around it.</p>
+
+<aside data-type="sidebar" id="javascripts-particular-difficulties-with-performance-QguGI1ULSK">
+<h5>JavaScript's particular difficulties with performance</h5>
+
+<p>For some types of JavaScript (See Chapter 2: which JavaScript are you using?), it will be completely impossible to either change (unsafe) or refactor (safe) your code without changing performance. Adding a few lines of front-end code that don't get minimized will increase the time for downloading and processing. The incredible amount of build tools, compilers, and implementations might perform any number of tricks because of how you structured your code.</p>
+
+<p>These things might be important for your program, but just to be clear, refactoring's promise of "not changing behavior" must not apply to these situations. Subtle, and difficult to control performance implications should be treated as a separate concern.</p>
+</aside>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="what-is-the-point-of-refactoring-if-behavior-doesnt-change-mRsJtG">
+<h1>What is the point of refactoring if behavior doesn't change?</h1>
+
+<p>The point is to <em>improve</em> quality while <em>preserving</em> behavior. This is not to say that fixing bugs in broken code and creating new features (writing new code) are not important. In fact, these two types of tasks are tied more closely to business objectives, and are likely to receive much more direct attention from project/product managers than concerns about the quality of the code base. However, those actions are both about changing behavior and therefore are distinct from refactoring.</p>
+
+<p>We now have two more items to address. First, why is quality important, in the context of "getting things done?" Second, what is quality, and how does refactoring to contribute to it?</p>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="balancing-quality-and-getting-things-done-qQsafQtY">
+<h2>Balancing Quality and Getting Things Done</h2>
+
+<p>It may seem as though everyone and every project operates on a simple spectrum between quality and getting things done. On the one end, you have a "beautiful" code base that doesn't do anything of value. And on the other hand, you have a code base that tries to support many features, but is full of bugs and half completed ideas.</p>
+
+<p>A metaphor that has gained popularity in the last 20 years is that of <em>technical debt</em>. Describing things this way puts code into a pseudo-financial lingo that non-coders can understand easily, and facilitates a more nuanced conversation about how quickly tasks can and should be done.</p>
+
+<p>The aforementioned spectrum of quality to speed is accurate to a degree. On small projects, visible and addressable technical debt may be acceptable. As a project grows however, quality becomes increasingly important.</p>
+</section>
+
+<section data-type="sect2" id="what-is-quality-and-how-does-it-relate-to-refactoring-BgsWSEtZ">
+<h2>What is quality and how does it relate to refactoring?</h2>
+
+<p>There have been countless efforts to determine what makes for quality code. Some are determined by collections of principles:</p>
+
+<ul>
+	<li>SOLID: Single Responsibility, Open-Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion.</li>
+	<li>DRY: Don't repeat yourself</li>
+	<li>KISS: Keep it simple, stupid</li>
+	<li>GRASP: General responsibility assignment software patterns</li>
+	<li>YAGNI: Ya ain't gonna need it</li>
+</ul>
+
+<p>There are metrics like code/test coverage, complexity, numbers of arguments, and length of a file. There are tools to monitor for syntax errors and style guide violations. Some languages go as far as to eliminate the possibility of certain styles of code from being written.</p>
+
+<p>There is no one grand metric for quality. For the purposes of this book, quality code is that code that works properly and is able to be extended easily. Flowing from that, our tactical concerns are to write tests for code, and write code that is easily testable. The author not so humbly introduces the "EVAN" principles of code quality:</p>
+
+<ul>
+	<li>Extract functions and modules to simplify interfaces</li>
+	<li>Verify code behavior through tests</li>
+	<li>Avoid impure functions when possible</li>
+	<li>Name variables and functions well</li>
+</ul>
+
+<p>Feel free to make up your own "principles of software quality" with your own name.</p>
+
+<aside data-type="sidebar" id="human-readability-as-quality-geuzIES6td">
+<h5>Human Readability as Quality</h5>
+
+<p>"Human readability" is sometimes cited as the chief concern for quality, but this is a fairly intractable metric. Humans come with varying experiences with and exposure to concepts. New coders, or even seasoned ones in a new paradigm or code base, can struggle with abstractions, properly applied or not.</p>
+
+<p>One could conclude from that line of thinking, that only the simplest abstractions can be a part of a high quality code base.</p>
+
+<p>In practice, teams find a balance between avoiding using esoteric and confusing features, and making time to mentor junior members to understand well-applied and sensible abstractions.</p>
+</aside>
+
+<p>In the context of refactoring, quality is the goal.</p>
+
+<p>Because you solve such a wide range of problems in software and have so many tools at your disposal, your first guess is rarely optimal. To demand of yourself only to write the best solutions (and never revisit them) is completely impractical.</p>
+
+<p>With refactoring, you write your best guess for the code and the test, although not in that order if you're doing TDD (See Chapter 4). Then, your tests ensure that as you change the <em>details</em> of the code, the overall <em>behavior</em> (inputs and outputs of the test, aka, the interface) remains the same. With the freedom that provides, you can change your code, approaching whatever version of quality (possibly including performance and other "non-functional" characteristics) and whatever forms of abstraction you see fit. Aside from the benefit of being able to improve your code gradually, one significant additional perk of practicing refactoring is that you will learn to be less wrong the first time around: not by insisting on it up front, but by having experience with transforming bad code into good code.</p>
+
+<p>So we use refactoring to safely change code (but not behavior), in order to improve quality. You may rightfully be wondering what this looks like in action. This is what is covered in the rest of the book, however, we have a few chapters of background to get through before that promise can be delivered upon.</p>
+
+<p>Chapter 2 provides background on JavaScript itself. Chapters 3 and 4 give a justification for tests, followed by an actionable approach for testing, derived from natural inclinations to write code confidently and iterate quickly, rather than a dogmatic insistence on testing simply being understood as something unquestionably good and proper. Chapter 5 explores quality in depth, aided by function visualizations called "Trellus Diagrams," which you can learn more about at <a href="http://trell.us">trell.us</a>.</p>
+
+<p>In Chapters 6 and 7, we look at general refactoring techniques. Following that, we look at refactoring Object-Oriented code with hierarchies in Chapter 8 and patterns in Chapter 9. Then we finish with Asynchronous Refactoring (Chapter 10), and refactoring through Functional Programming (Chapter 11).</p>
+
+<p>Nailing down what exactly quality is can be tough in a language as broad as JavaScript, but with the range of skills covered in these chapters, you should be left with a ton of options.</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="what-is-and-isnt-refactoring-eEs7IR">
+<h1>What is and isn't refactoring</h1>
+
+<p>Before we leave off, let's once again distinguish between refactoring and other lookalike processes. Here are a list of things that are not refactoring. Instead, they create new code and features:</p>
+
+<ul>
+	<li>Adding square root functionality to a calculator application</li>
+	<li>Creating an app/program from scratch</li>
+	<li>Rebuilding an existing app/program in a new framework</li>
+	<li>Adding a new package to an application or program</li>
+	<li>Addressing a user by first and last name instead of first name</li>
+	<li>Localizing</li>
+	<li>Performance optimization</li>
+	<li>Converting code to use a different interface (eg. synchronous to asynchronous or callbacks to promises)</li>
+</ul>
+
+<p>And the list goes on. For existing code, any changes made to the interface (aka. behavior) <em>should</em> break tests. Otherwise, this indicates poor coverage. However, changes to the underlying details of implementation <em>should not</em> break tests.</p>
+
+<p>Additionally, any code changes made without tests in place (or at least a commitment to manually test the code), cannot guarantee to preserve behavior, and therefore, are not refactoring, just changing code.</p>
+
+<div data-type="note" id="refactoring-vs-refactoring-Zqc8SQIz"><h6>Note</h6>
+<h1>"refactoring" vs. "Refactoring"</h1>
+
+<p>Initially for this book, it was considered that "refactoring," as it is colloquially used to mean "changing code" would be designated by a lower case "r" whereas our more specific definition (confidently changing code in a way that preserves behavior) would have a capital "R." Because this is cumbersome and we <em>never</em> mean lower-case "refactoring" in the context of this book, this distinction is not used. However, when you hear someone say "refactoring," it is worth pausing to consider whether they mean "Refactoring" or "refactoring" (aka "restructuring" or just changing code).</p>
+</div>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="wrapping-up-7VsbCM">
+<h1>Wrapping Up</h1>
+
+<p>Hopefully, this chapter has helped to reveal what refactoring is, or at least provide some examples of what it is not.</p>
+
+<p>If defining and achieving quality code through refactoring in JavaScript could be done in the abstract or by simply by looking at inspiring source examples from other languages (notably Java), our JavaScript code bases would not suffer from the "broken or new" dichotomy of today, where code bases are poorly maintained until they are rewritten using tool A or framework B: a costly and risky approach.</p>
+
+<p>Frameworks can't save us from our quality issues. jQuery didn't save us, and neither will ESNext, Ramda, Sanctuary, Immutable.js, React, Elm, or whatever comes next. Reducing and organizing code is useful, but through the rest of this book, you will be developing a process to make improvements that don't involve a cycle of suffering with poor quality followed by investing an unknowable amount of time to rebuild it in "Framework Of The Month", followed by more suffering in that framework, followed by rebuilding... and so on.</p>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+  </body>
+</html>
