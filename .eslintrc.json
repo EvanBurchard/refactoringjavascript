@@ -24,6 +24,12 @@
       "prefer-template": 1,
       "comma-dangle": 0,
       "quotes": 1,
-      "no-underscore-dangle": 0
+      "no-underscore-dangle": 0,
+      "max-len": ["error", 75],
+      "operator-assignment": 1,
+      "no-plusplus": 0,
+      "no-mixed-operators": 0,
+      "vars-on-top": 1
+
     }
 }
