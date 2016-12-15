@@ -88,6 +88,8 @@ setLabelProbabilities();
 setChordCountsInLabels();
 setProbabilityOfChordsInLabels();
 
+
+
 function classify(chords){
   var ttal = labelProbabilities;
   console.log(ttal);
