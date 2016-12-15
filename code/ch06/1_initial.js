@@ -1,5 +1,5 @@
 fs = require('fs');
-//songs
+// songs
 imagine = ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'];
 somewhere_over_the_rainbow = ['c', 'em', 'f', 'g', 'am'];
 tooManyCooks = ['c', 'g', 'f'];
@@ -7,8 +7,10 @@ iWillFollowYouIntoTheDark = ['f', 'dm', 'bb', 'c', 'a', 'bbm'];
 babyOneMoreTime = ['cm', 'g', 'bb', 'eb', 'fm', 'ab'];
 creep = ['g', 'gsus4', 'b', 'bsus4', 'c', 'cmsus4', 'cm6'];
 army = ['ab', 'ebm7', 'dbadd9', 'fm7', 'bbm', 'abmaj7', 'ebm'];
-paperBag = ['bm7', 'e', 'c', 'g', 'b7', 'f', 'em', 'a', 'cmaj7', 'em7', 'a7', 'f7', 'b'];
-toxic = ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7', 'g7'];
+paperBag = ['bm7', 'e', 'c', 'g', 'b7', 'f', 'em', 'a', 'cmaj7',
+            'em7', 'a7', 'f7', 'b'];
+toxic = ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7',
+         'g7'];
 bulletproof = ['d#m', 'g#', 'b', 'f#', 'g#m', 'c#'];
 song_11 = [];
 
@@ -53,7 +55,8 @@ function setChordCountsInLabels(){
     }
     i[1].forEach(function(j){
       if(chordCountsInLabels[i[0]][j] > 0){
-        chordCountsInLabels[i[0]][j] = chordCountsInLabels[i[0]][j] + 1;
+        chordCountsInLabels[i[0]][j] =
+chordCountsInLabels[i[0]][j] + 1;
       } else {
         chordCountsInLabels[i[0]][j] = 1;
       }
@@ -65,7 +68,8 @@ function setProbabilityOfChordsInLabels(){
   probabilityOfChordsInLabels = chordCountsInLabels;
   Object.keys(probabilityOfChordsInLabels).forEach(function(i){
     Object.keys(probabilityOfChordsInLabels[i]).forEach(function(j){
-      probabilityOfChordsInLabels[i][j] = probabilityOfChordsInLabels[i][j] * 1.0 / songs.length;
+      probabilityOfChordsInLabels[i][j] =
+probabilityOfChordsInLabels[i][j] * 1.0 / songs.length;
     });
   });
 }
@@ -91,14 +95,15 @@ function classify(chords){
   Object.keys(ttal).forEach(function(obj){
     var first = labelProbabilities[obj] + 1.01;
     chords.forEach(function(chord){
-      var probabilityOfChordInLabel = probabilityOfChordsInLabels[obj][chord];
+      var probabilityOfChordInLabel =
+probabilityOfChordsInLabels[obj][chord];
       if(probabilityOfChordInLabel === undefined){
         first + 1.01;
       } else {
         first = first * (probabilityOfChordInLabel + 1.01);
       }
     });
-    classified[obj] = first
+    classified[obj] = first;
   });
   console.log(classified);
 };

@@ -25,7 +25,7 @@
       "comma-dangle": 0,
       "quotes": 1,
       "no-underscore-dangle": 0,
-      "max-len": ["error", 75],
+      "max-len": ["error", 70],
       "operator-assignment": 1,
       "no-plusplus": 0,
       "no-mixed-operators": 0,
