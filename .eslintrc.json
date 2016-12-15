@@ -29,7 +29,8 @@
       "operator-assignment": 1,
       "no-plusplus": 0,
       "no-mixed-operators": 0,
-      "vars-on-top": 1
+      "vars-on-top": 1,
+      "object-curly-spacing": 0
 
     }
 }
