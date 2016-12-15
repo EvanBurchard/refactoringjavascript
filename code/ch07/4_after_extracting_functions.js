@@ -3,13 +3,14 @@ function welcomeMessage(){
 };
 function fileName(){
   var theError = new Error("here I am");
-  return /\/(\w+\.js)\:/.exec(theError.stack)[1];
-}
+  return theError.stack.match(/\/(\w+\.js)\:/)[1];
+};
 function setDifficulties(){
   easy = 'easy';
   medium = 'medium';
   hard = 'hard';
 };
+
 
 function setSongs(){
   imagine = ['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'];
@@ -22,7 +23,8 @@ function setSongs(){
               'b7', 'f', 'em', 'a',
               'cmaj7', 'em7', 'a7', 'f7',
               'b'];
-  toxic = ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab', 'gmaj7', 'g7'];
+  toxic = ['cm', 'eb', 'g', 'cdim', 'eb7', 'd7', 'db7', 'ab',
+           'gmaj7', 'g7'];
   bulletproof = ['d#m', 'g#', 'b', 'f#', 'g#m', 'c#'];
 };
 
@@ -35,8 +37,9 @@ function setup(){
   probabilityOfChordsInLabels = new Map();
 };
 
+
 function train(chords, label){
-  songs.push({label: label, chords: chords});
+  songs.push({label, chords});
   chords.forEach(chord => allChords.add(chord));
   if(Array.from(labelCounts.keys()).includes(label)){
     labelCounts.set(label, labelCounts.get(label) + 1);
@@ -48,13 +51,13 @@ function train(chords, label){
 function setLabelProbabilities(){
   labelCounts.forEach(function(_count, label){
     labelProbabilities.set(label, labelCounts.get(label) / songs.length);
-  })
+  });
 };
 
 function setChordCountsInLabels(){
   songs.forEach(function(song){
     if(chordCountsInLabels.get(song.label) === undefined){
-      chordCountsInLabels.set(song.label, {})
+      chordCountsInLabels.set(song.label, {});
     }
     song.chords.forEach(function(chord){
       if(chordCountsInLabels.get(song.label)[chord] > 0){
@@ -69,15 +72,16 @@ function setChordCountsInLabels(){
 function setProbabilityOfChordsInLabels(){
   probabilityOfChordsInLabels = chordCountsInLabels;
   probabilityOfChordsInLabels.forEach(function(_chords, difficulty){
-    Object.keys(probabilityOfChordsInLabels.get(difficulty)).forEach(function(chord){
+    Object.keys(probabilityOfChordsInLabels.get(difficulty)).forEach(
+function(chord){
       probabilityOfChordsInLabels.get(difficulty)[chord] /= songs.length;
-    })
-  })
+    });
+  });
 }
 
 function trainAll(){
-  setup();
   setDifficulties();
+  setup();
   setSongs();
   train(imagine, easy);
   train(somewhereOverTheRainbow, easy);
@@ -103,11 +107,12 @@ function classify(chords){
   labelProbabilities.forEach(function(_probabilities, difficulty){
     var first = labelProbabilities.get(difficulty) + smoothing;
     chords.forEach(function(chord){
-      var probabilityOfChordInLabel = probabilityOfChordsInLabels.get(difficulty)[chord]
+      var probabilityOfChordInLabel =
+probabilityOfChordsInLabels.get(difficulty)[chord];
       if(probabilityOfChordInLabel){
-        first = first * (probabilityOfChordInLabel + smoothing)
+        first = first * (probabilityOfChordInLabel + smoothing);
       }
-    })
+    });
     classified.set(difficulty, first);
   });
   return classified;
@@ -117,23 +122,21 @@ var wish = require('wish');
 describe('the file', function() {
   trainAll();
   it('classifies', function(){
-    var classified = classify(['f#m7', 'a', 'dadd9', 'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
+    var classified = classify(['f#m7', 'a', 'dadd9',
+                               'dmaj7', 'bm', 'bm7', 'd', 'f#m']);
     wish(classified.get('easy') === 1.3433333333333333);
     wish(classified.get('medium') === 1.5060259259259259);
     wish(classified.get('hard') === 1.6884223991769547);
   });
-
   it('classifies again', function(){
     var classified = classify(['d', 'g', 'e', 'dm']);
     wish(classified.get('easy') === 2.023094827160494);
     wish(classified.get('medium') === 1.855758613168724);
     wish(classified.get('hard') === 1.855758613168724);
   });
-
   it('sets welcome message', function(){
-    wish(welcomeMessage() === 'Welcome to 4_after_extracting_functions.js!')
+    wish(welcomeMessage() === 'Welcome to nb.js!')
   });
-
   it('label probabilities', function(){
     wish(labelProbabilities.get('easy') === 0.3333333333333333);
     wish(labelProbabilities.get('medium') === 0.3333333333333333);
