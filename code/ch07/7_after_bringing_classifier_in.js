@@ -15,7 +15,7 @@ const classifier = {
   chordCountsInLabels: new Map(),
   smoothing: 1.01,
   valueForChordDifficulty(difficulty, chord){
-    const value = 
+    const value =
       this.probabilityOfChordsInLabels.get(difficulty)[chord];
     return value ? value + this.smoothing : 1;
   },
@@ -26,7 +26,7 @@ const classifier = {
         return [difficulty,
           chords.reduce((total, chord) => {
           return total * this.valueForChordDifficulty(difficulty, chord);
-          }, this.labelProbabilities.get(difficulty) + 
+          }, this.labelProbabilities.get(difficulty) +
             this.smoothing)
         ]
     }));
@@ -75,7 +75,7 @@ function setProbabilityOfChordsInLabels(){
   classifier.probabilityOfChordsInLabels = classifier.chordCountsInLabels;
   classifier.probabilityOfChordsInLabels.forEach(function(_chords, difficulty){
     Object.keys(classifier.probabilityOfChordsInLabels.get(difficulty)).forEach(function(chord){
-      classifier.probabilityOfChordsInLabels.get(difficulty)[chord] /=  classifier.songs.length;
+      classifier.probabilityOfChordsInLabels.get(difficulty)[chord] /= classifier.songs.length;
     })
   })
 }
@@ -122,4 +122,3 @@ describe('the file', function() {
     wish(classifier.labelProbabilities.get('hard') === 0.3333333333333333);
   });
 });
-

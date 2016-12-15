@@ -57,7 +57,7 @@ function setProbabilityOfChordsInLabels(){
   classifier.probabilityOfChordsInLabels = classifier.chordCountsInLabels;
   classifier.probabilityOfChordsInLabels.forEach(function(_chords, difficulty){
     Object.keys(classifier.probabilityOfChordsInLabels.get(difficulty)).forEach(function(chord){
-      classifier.probabilityOfChordsInLabels.get(difficulty)[chord] /=  classifier.songs.length;
+      classifier.probabilityOfChordsInLabels.get(difficulty)[chord] /= classifier.songs.length;
     })
   })
 }
@@ -120,4 +120,3 @@ describe('the file', function() {
     wish(classifier.labelProbabilities.get('hard') === 0.3333333333333333);
   });
 });
-
