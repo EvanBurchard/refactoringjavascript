@@ -91,10 +91,10 @@ function setLabelsAndProbabilities(){
 const wish = require('wish');
 describe('the file', function() {
   songList.addSong('imagine',
-['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], 0)
+['c', 'cmaj7', 'f', 'am', 'dm', 'g', 'e7'], 0);
   songList.addSong('somewhereOverTheRainbow',
-['c', 'em', 'f', 'g', 'am'], 0)
-  songList.addSong('tooManyCooks', ['c', 'g', 'f'], 0)
+['c', 'em', 'f', 'g', 'am'], 0);
+  songList.addSong('tooManyCooks', ['c', 'g', 'f'], 0);
   songList.addSong('iWillFollowYouIntoTheDark',
 ['f', 'dm', 'bb', 'c', 'a', 'bbm'], 1);
   songList.addSong('babyOneMoreTime',
