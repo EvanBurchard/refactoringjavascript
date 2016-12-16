@@ -19,7 +19,7 @@ const classifier = {
     return this.chordCountsInLabels
       .get(difficulty)[chord] / this.songs.length;
   },
-  valueForChordDifficulty: function(difficulty, chord){
+  valueForChordDifficulty(difficulty, chord){
     const value = this.likelihoodFromChord(difficulty, chord);
     return value ? value + this.smoothing : 1;
   },

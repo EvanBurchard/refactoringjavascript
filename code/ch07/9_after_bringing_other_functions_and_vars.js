@@ -28,7 +28,7 @@ const classifier = {
     return this.chordCountForDifficulty(difficulty, chord) /
 this.songList.songs.length;
   },
-  valueForChordDifficulty: function(difficulty, chord){
+  valueForChordDifficulty(difficulty, chord){
     const value = this.likelihoodFromChord(difficulty, chord);
     return value ? value + this.smoothing : 1;
   },
