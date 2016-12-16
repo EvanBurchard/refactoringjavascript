@@ -5,11 +5,11 @@ describe('the file', () => {
   classifier.addText('english text',
                      ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
                       'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q'],
-                      0)
+                      0);
   classifier.addText('japanese text',
                      ['あ',     'い',    'う',     'え',     'お',
                        'か',     'き',    'く',    'け',    'こ'],
-                       1)
+                       1);
 
   classifier.trainAll();
   it('classifies', () =>{
