@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <section data-type="chapter" id="testing-in-action-vM6sR">
+<h1>Testing in Action</h1>
+
+<p>In the last chapter, we looked at some common objections to testing, and explored the benefits that hopefully overwhelmed those objections. If they can't for your project, then there's a strong possibility that either your team doesn't have the strongest engineering culture (quite possibly for reasons out of their control), or you haven't quite turned the corner on being able to write tests fast enough to justify their benefits.</p>
+
+<p>In this chapter, we're getting into the details of how to test in the following scenarios:</p>
+
+<ul>
+	<li>New Code from Scratch</li>
+	<li>New Code from Scratch with TDD</li>
+	<li>New Features</li>
+	<li>Untested Code</li>
+	<li>Regression Testing for Bugs</li>
+</ul>
+
+<p>At the risk of beating a dead horse, you can't refactor without tests. You can <em>change code</em>, but you need a way to guarantee that your code paths are working.</p>
+
+<div data-type="note" id="refactoring-without-tests-a-historical-note-R5UWu8"><h6>Note</h6>
+<h1>Refactoring without tests: a historical note</h1>
+
+<p>In the original 1992 work on refactoring, "Refactoring Object-Oriented Frameworks" by William Opdyke (and advised by Ralph Johnson of "Design Patterns" fame), the word "test" appears only 39 times in a 202 page paper. However, he is insistent on refactoring as a process that preserves behavior. The term "invariant" appears 125 times, and "precondition" comes up frequently as well.</p>
+
+<p>In a non-academic setting, 24 years after the original work, and in JavaScript, with its rich ecosystem of testing tools, the mechanisms of preserving behavior are best facilitated by the processes we discuss in this book, and especially this chapter.</p>
+
+<p>However, if you're curious about the initial ideas that went into refactoring, in a context likely a bit removed from your day job, checking out the original work is highly recommended.</p>
+</div>
+
+<div data-type="warning" id="before-moving-on-o8UwIa"><h6>Warning</h6>
+<h1>Before moving on!</h1>
+
+<p>We have some shopping to do. We need node, npm, and mocha.</p>
+
+<ul>
+	<li>Get node (version 6.7.0) from <a href="http://nodejs.org">nodejs.org</a>. A later version will also probably work.</li>
+	<li>Installing node should also install npm .</li>
+	<li>When you have npm, install mocha with <strong><code>sudo npm -g install mocha</code></strong> (may not need "sudo").</li>
+</ul>
+
+<p>To make sure everything is alright, try running the following</p>
+
+<ul>
+	<li><strong><code>node -v</code></strong></li>
+	<li><strong><code>npm -v</code></strong></li>
+	<li><strong><code>mocha -V</code></strong></li>
+</ul>
+
+<p>Yes, that last "V" is a capital "V", but the others are lower case. If get back anything other than version numbers, try searching for "installing node/npm on [whatever your operating system is]" (eg. "installing npm on windows").</p>
+
+<p>By the way, we tend to not use the <strong><code>-g</code></strong> (global) flag for other packages. We use the global flag here because we want the tool available at the command line. The <a href="http://docs.npmjs.com/getting-started/installing-npm-packages-globally">npm docs</a> have additional details.</p>
+
+<p>The full reference versions of libraries used in creating this book can be found in Appendix A.</p>
+</div>
+
+<p>&nbsp;</p>
+
+<section data-type="sect1" id="new-code-from-scratch-nEsEhO">
+<h1>New code from scratch</h1>
+
+<p>Here, we get the following specification from our boss or client:</p>
+
+<p>"Build a program that, given an array of 5 cards (each being a string like 'Q-H' for queen of hearts) from a standard 52 card deck, prints the name of the hand (eg. 'straight,' 'flush,' 'pair,' etc.)"</p>
+
+<aside data-type="sidebar" id="new-features-vs-new-code-from-scratch-bjH3CMhW">
+<h5>New features vs. new code from scratch</h5>
+
+<p>In terms of testing, creating a new<em> </em>feature is <em>almost</em> identical to creating the program from scratch. The biggest difference is that for new <em>features</em>, you will likely be able to use some testing infrastructure that has already been decided on, whereas in a <em>greenfield </em>(from scratch<em>) </em>project, the testing will be a blank slate, and you will have some setting up to do.</p>
+
+<p>In the following two sections, testing with a new code base quickly becomes breaking things down into individual features to test, which should illustrate this similarity.</p>
+
+<p>Note that on a new project, while you might prefer to set up testing infrastructure before creating any implementation code, in these sections testing infrastructure is introduced as complexities arise that justify its use. This is done primarily to serve those without much experience testing, even though it is recommended that basic test infrastructure is set up beforehand. That said, be careful not to go overboard with test tooling. Worrying about too many dependencies of any kind can be very frustrating and take time away from implementing actual features.</p>
+</aside>
+
+<p>So how do we start? How about with a <code>checkHand</code> function? First, create a file and save it as check-hand.js. If you run it with <strong><code>node check-hand.js</code></strong> right now, nothing will happen. It's just a blank file.</p>
+
+<div data-type="warning" id="be-careful-with-ordering-of-function-expressions-d3UduAhl"><h6>Warning</h6>
+<h1>Be Careful with Ordering of Function Expressions</h1>
+
+<p>In this chapter, we use the syntax:</p>
+
+<pre data-type="programlisting">
+var functionName = function(){
+
+//rather than
+function functionName(){
+</pre>
+
+<p>Either style is fine, but in the first one (function expressions) the order in which you define your functions matters. If you get this error:</p>
+
+<pre data-type="programlisting">
+TypeError: yourFunctionName is not a function
+</pre>
+
+<p>Then you should rearrange your functions or use the second syntax. We'll discuss this (along with the idea of "hoisting") more in Chapter 6.</p>
+</div>
+
+<p>We can start by writing a function that is basically a large case statement:</p>
+
+<pre data-type="programlisting">
+var checkHand = function(hand){
+&nbsp; if (checkStraightFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight flush';
+&nbsp; }
+&nbsp; else if (checkFourOfKind(hand)){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }
+&nbsp; else if (checkFullHouse(hand)){
+&nbsp;&nbsp;&nbsp; return 'full house';
+&nbsp; }
+&nbsp; else if (checkFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'flush';
+&nbsp; }
+&nbsp; else if (checkStraight(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight';
+&nbsp; }
+&nbsp; else if (checkThreeOfKind(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }
+&nbsp; else if (checkTwoPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'two pair';
+&nbsp; }
+&nbsp; else if (checkPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }
+&nbsp; else {
+&nbsp;&nbsp;&nbsp; return 'high card';
+&nbsp; }
+};
+
+console.log(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C']));
+</pre>
+
+<p>The last line is typical of something we'd add to ensure things are still behaving. While we're working, we might adjust this statement, or add more. If we're honest with ourselves, this <code>console.log</code> is a test case, but it's very high-level, and the output isn't structured. So in a way, adding lines like this is like having tests, but just not great ones. Probably the strangest part about doing things this way is that once we have eight or ten print statements, it will be hard to keep track of what means what. That means we need some structure to the format of our output. So we add things like:</p>
+
+<pre data-type="programlisting">
+console.log('value of checkHand is ' + 
+            checkHand(['2-H', '3-C', '4-D', '5-H', '2-C']));</pre>
+
+<p>Once we start doing this, we're actually doing the job of the test runner part of a test framework: one with very few features, but tons of duplication and inconsistency. Natural as it might be, this is a sure path to guesswork and frustration with temporary fits of confidence.</p>
+
+<aside data-type="sidebar" id="look-for-these-symptoms-DQHnslhb">
+<h5>Look for these symptoms</h5>
+
+<p>Do you find programming to be an emotional roller coaster cycling between swearing and pumping your fist into the air saying "yes!", followed by some more swearing?</p>
+
+<p>This is a sign your feedback loop is not tight enough. Getting too excited or disappointed about things working or not both reflect a state of surprise. It is very hard to be surprised if you are working in small steps, testing frequently, and <strong>using version control to maintain a recent and good version of the code</strong>.</p>
+
+<p>Is it boring to not let your code surprise you? Maybe. Will you save a lot of time by not having to guess and redo work? Definitely.</p>
+</aside>
+
+<p>Instinctively, new coders will manually test like this as they write the code, and then delete all of the <code>console.log</code> statements afterwards, effectively destroying any <em>test-like</em> coverage that they had. Because we know that tests are important, we will get our coverage back after the tests are written, but isn't it odd to write these tiny, weird tests, delete them, and then write better versions after?</p>
+
+<aside data-type="sidebar" id="consolelog-isnt-the-only-way-to-go-jKHOiXhP">
+<h5>console.log isn't the only way to go</h5>
+
+<p>With node, you can use the debugger by running <strong><code>node debug <em>my-program-name.js</em></code></strong> instead of <strong><code>node <em>my-program-name.js</em></code></strong></p>
+
+<p>By default, it gives you an interface to step through your file line by line. If you're interested in a specific section of your code, you can set a breakpoint by adding a line like this:</p>
+
+<pre data-type="programlisting">
+debugger;</pre>
+
+<p>Now when you run <strong><code>node debug <em>my-program-name.js</em></code></strong>, you'll still be started at the first line, but typing <strong><code>c</code></strong> or <strong><code>cont</code></strong> (it means "continue," but "continue" isn't a valid command as it's already a reserved word in JS) will take you to your breakpoint.</p>
+
+<p>If you're unfamiliar with what the debugger can do, type <strong><code>help</code></strong> inside of the debugger for a list of commands.</p>
+</aside>
+
+<p>So what's next? Well, you take off for a week, and your coworkers start implementing these <code>check</code> methods, manually testing with <code>console</code> along the way to "see if it's working."</p>
+
+<p>And you come back to this:</p>
+
+<pre data-type="programlisting">
+// not just multiples
+checkStraightFlush = function(){
+&nbsp; return false;
+};
+checkFullHouse = function(){
+&nbsp; return false;
+};
+checkFlush = function(){
+&nbsp; return false;
+};
+checkStraight = function(){
+&nbsp; return false;
+};
+checkStraightFlush = function(){
+&nbsp; return false;
+};
+checkTwoPair = function(){
+&nbsp; return false;
+};
+
+// just multiples
+checkFourOfKind = function(){
+&nbsp; return false;
+};
+checkThreeOfKind = function(){
+&nbsp; return false;
+};
+checkPair = function(){
+&nbsp; return false;
+};
+
+// get just the values
+var getValues = function(hand){
+&nbsp; console.log(hand);
+&nbsp; var values = [];
+&nbsp; for(var i=0;i&lt;hand.length;i++){
+&nbsp;&nbsp;&nbsp; console.log(hand[i]);
+&nbsp;&nbsp;&nbsp; values.push(hand[i][0]);
+&nbsp; }
+&nbsp; console.log(values);
+&nbsp; return values;
+};
+
+var countDuplicates = function(values){
+&nbsp; console.log('values are: ' + values);
+&nbsp; var numberOfDuplicates = 0;
+&nbsp; var duplicatesOfThisCard;
+&nbsp; for(var i=0;i&lt;values.length;i++){
+&nbsp;&nbsp;&nbsp; duplicatesOfThisCard = 0;
+&nbsp;&nbsp;&nbsp; console.log(numberOfDuplicates);
+&nbsp;&nbsp;&nbsp; console.log(duplicatesOfThisCard);
+&nbsp;&nbsp;&nbsp; if(values[i] == values[0]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; duplicatesOfThisCard += 1;
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; if(values[i] == values[1]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; duplicatesOfThisCard += 1;
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; if(values[i] == values[2]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; duplicatesOfThisCard += 1;
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; if(values[i] == values[3]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; duplicatesOfThisCard += 1;
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; if(values[i] == values[4]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; duplicatesOfThisCard += 1;
+&nbsp;&nbsp;&nbsp; }
+&nbsp;&nbsp;&nbsp; if(duplicatesOfThisCard &gt; numberOfDuplicates){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; numberOfDuplicates = duplicatesOfThisCard;
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }
+&nbsp; return numberOfDuplicates;
+};
+
+var checkHand = function(hand){
+&nbsp; var values = getValues(hand);
+&nbsp; var number = countDuplicates(values);
+&nbsp; console.log(number);
+
+&nbsp; if (checkStraightFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight flush';
+&nbsp; }
+&nbsp; else if (number==4){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }
+&nbsp; else if (checkFullHouse(hand)){
+&nbsp;&nbsp;&nbsp; return 'full house';
+&nbsp; }
+&nbsp; else if (checkFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'flush';
+&nbsp; }
+&nbsp; else if (checkStraight(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight';
+&nbsp; }
+&nbsp; else if (number==3){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }
+&nbsp; else if (checkTwoPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'two pair';
+&nbsp; }
+&nbsp; else if (number==2){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }
+&nbsp; else{
+&nbsp;&nbsp;&nbsp; return 'high card';
+&nbsp; }
+};
+// debugger;
+console.log(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C']));
+console.log(checkHand(['3-H', '3-C', '3-D', '5-H', '2-H']));
+</pre>
+
+<p>Oh no! What happened? Well, first we decided to make sure pairs worked, so we made every other function return <code>false</code> so that only the pair condition would be triggered. Then we introduced a function to count the number of duplicates, which required getting the values of the cards. We reused this function for four and three of a kind, but it doesn't seem very elegant. Also, our <code>getValues</code> function is going to break with a value of <code>10</code>, because it will return a <code>1</code>, aka an ace. Note that the <code>[0]</code> in the following line takes the first character of the string:</p>
+
+<pre class="drop-element-attached-top drop-element-attached-center drop-target-attached-bottom drop-target-attached-center" data-type="programlisting">
+values.push(hand[i][0]);</pre>
+
+<p>So we have one very rough implementation, one bug that we may or may not have noticed, half of the functions are implemented, half of them were replaced with inline variables, and we have a lot of <code>console.log</code> statements in place as sanity checks. There's no real consistency in what was logged. They were introduced at points of confusion. We also have a commented out a place where we might have had a debugger earlier.</p>
+
+<p>Where do we go from here? Fix the bug? Implement the other functions? Hopefully, the last three and a half chapters have convinced you that attempting to improve the <code>countDuplicates</code> function would not be <em>refactoring</em> at this point. It would be changing code, but it would not be a safe process we could be confident in.</p>
+
+<p>If we're "testing after" rather than before, how long should we wait? Should we add tests now? Should we finish our attempt of implementation first?</p>
+
+<aside data-type="sidebar" id="soup-vs-baking-wDHVhbhb">
+<h5>Soup vs. Baking</h5>
+
+<p>I like making soup. Fairly early on, you can start to taste it as you go, adding more ingredients, and tasting them individually as well. Baking on the other hand, is very frustrating. You have to wait 45 minutes before you can know if it's any good.</p>
+
+<p>TDD is like making soup. You can have a tight feedback loop with the ingredients (low-level tests) or in bites (high-level tests).</p>
+
+<p>Some people say the bites are all that matters, or they find tasting as you go to be too much effort. Some people hate soup: making it or eating it.</p>
+
+<p>In other words, get ready for some TDD later in this chapter.</p>
+</aside>
+
+<p>Later, we'll deal with a legacy system that we have to basically trust, but at this point, we've just started this code. No one is relying on it yet, so we can feel free to throw away all the bad parts. What does that leave us with?</p>
+
+<pre data-type="programlisting">
+console.log(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C']));
+console.log(checkHand(['3-H', '3-C', '3-D', '5-H', '2-H']));</pre>
+
+<p>Yes. Just the high-level test cases. Let's use these and start over, with one tiny transformation.</p>
+
+<pre data-type="programlisting">
+var assert = require('assert');
+assert(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+assert(checkHand(['3-H', '3-C', '3-D', 
+                  '5-H', '2-H'])==='three of a kind');
+</pre>
+
+<div data-type="note" id="breaking-up-long-lines-of-code-2ZU1iNhl"><h6>Note</h6>
+<h1>Breaking up long lines of code</h1>
+
+<p>Notice that we're sometimes breaking up lines so that they don't run off the edge of the page. We talk about the specifics of how to deal with long lines in later chapters, but for now just trust that these places are ok.</p>
+</div>
+
+<p>Instead of "printing" with <code>console.log</code>, let's use node's assert library to <em>assert</em> that <code>checkHand</code> returns the values that we want. Now when we run the file, if anything inside of the <code>assert</code> function throws an error or is false, we'll get an error. No print statements necessary. We just assert that running our function with that input returns the expected strings: 'pair' and 'three of a kind'.</p>
+
+<p>We also added a line to the beginning. This simply makes the assert statement available from node's core libraries. There are more sophisticated testing framework choices, but this involves minimal setup.</p>
+
+<p>Before we move on, let's introduce a flow chart to introduce all of the possibilities of what code we need to write when.</p>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/_testing_in_action_.png">&nbsp;_testing_in_action_.png</a></p>
+
+<figure id="id-JNtrcbh1"><img alt="" class="i_testing_in_action_png" src="_testing_in_action_.png">
+<figcaption><span class="label">Figure 4-1. </span>If you're ever wondering whether to write a test, refactor, or implement the code to make your test pass, this flow chart should help.</figcaption>
+</figure>
+</section>
+
+<p>&nbsp;</p>
+
+<section data-type="sect1" id="new-code-from-scratch-with-tdd-ZAsoTG">
+<h1>New code from scratch with TDD</h1>
+
+<p>Of course not all new code written without tests is going to end up in as awkward of a state as in the last section. It is certainly not reflective of an experienced coder's <em>best effort</em>. However, it is reflective of a lot of coders' <em>first effort</em>. The wonderful thing about refactoring is that given enough test coverage and confidence, your <em>first effort</em> doesn't have to be your <em>best effort</em>. Get the tests passing, and you have the flexibility to make it better afterwards.</p>
+
+<div data-type="note" id="about-tdd-and-red-green-refactor-Y0UnfWT8"><h6>Note</h6>
+<h1>About TDD and Red, Green, Refactor</h1>
+
+<p>This section jumps between lots of tiny code samples. This might seem tedious, but making tiny changes makes it much easier to discover and fix errors more quickly.</p>
+
+<p>If you've never done TDD before, actually typing the samples out and running the tests in this section would give you a good idea of how the pacing works. Even if TDD isn't something that you rely on all the time, knowing how to use tests for immediate feedback is valuable.</p>
+</div>
+
+<p>Ok. Back to our <code>checkHand</code> code. Let's just start with this:</p>
+
+<pre data-type="programlisting">
+var assert = require('assert');
+assert(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+assert(checkHand(['3-H', '3-C', '3-D',
+                  '5-H', '2-H'])==='three of a kind');
+</pre>
+
+<p>Let's keep those lines (the tests) at the bottom and add our implementation to the top of the file as we go. Ordinarily, we would start with just one test case, so let's ignore the "three of a kind" assertion for now.</p>
+
+<pre data-type="programlisting">
+var assert = require('assert');
+assert(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+/* assert(checkHand(['3-H', '3-C', '3-D',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '5-H', '2-H'])==='three of a kind'); */
+</pre>
+
+<p>Ok. So we save that file as check-hand.js and run it with <strong><code>node check-hand.js</code></strong></p>
+
+<p>What happens?</p>
+
+<pre data-type="programlisting">
+/fs/check-hand.js:2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; &nbsp;
+assert(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ^
+
+ReferenceError: checkHand is not defined
+&nbsp;&nbsp;&nbsp; at Object.&lt;anonymous&gt; (/fs/check-hand.js:2:8)
+&nbsp;&nbsp;&nbsp; at Module._compile (module.js:397:26)
+&nbsp;&nbsp;&nbsp; at Object.Module._extensions..js (module.js:404:10)
+&nbsp;&nbsp;&nbsp; at Module.load (module.js:343:32)
+&nbsp;&nbsp;&nbsp; at Function.Module._load (module.js:300:12)
+&nbsp;&nbsp;&nbsp; at Function.Module.runMain (module.js:429:10)
+&nbsp;&nbsp;&nbsp; at startup (node.js:139:18)
+&nbsp;&nbsp;&nbsp; at node.js:999:3
+
+shell returned 1
+</pre>
+
+<p>Great! We got to "red" of the "red/green/refactor" cycle, and we know exactly what to do next: add a <code>checkHand</code> function.</p>
+
+<pre data-type="programlisting">
+var checkHand = function(){ };
+var assert = require('assert');
+assert(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+/* assert(checkHand(['3-H', '3-C', '3-D',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   &nbsp;&nbsp;&nbsp; '5-H', '2-H'])==='three of a kind'); */
+</pre>
+
+<p>And we get a new error:</p>
+
+<pre data-type="programlisting">
+assert.js:89
+&nbsp; throw new assert.AssertionError({
+&nbsp; ^
+AssertionError: false == true
+&nbsp;&nbsp;&nbsp; at Object.&lt;anonymous&gt; (/fs/check-hand.js:3:1) 
+...(more of the stack trace)</pre>
+
+<p>This assert error is a little harder to understand. All this assertion knows about is whether what is inside evaluates to <code>true</code>, and it doesn't.</p>
+
+<p>Asserts can take 2 parameters. The first is the assertion, and the second is a message.</p>
+
+<pre data-type="programlisting">
+var checkHand = function(){ };
+var assert = require('assert');
+assert(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair',
+                 'checkHand did not reveal a "pair"');
+/* assert(checkHand(['3-H', '3-C', '3-D',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;    '5-H', '2-H'])==='three of a kind'); */
+</pre>
+
+<p>Now we get a new error message:</p>
+
+<pre data-type="programlisting">
+assert.js:89
+&nbsp; throw new assert.AssertionError({
+&nbsp; ^
+AssertionError: checkHand did not reveal a "pair"
+&nbsp;&nbsp;&nbsp; at Object.&lt;anonymous&gt; (/fs/check-hand.js:3:1)
+...(more stack trace)
+</pre>
+
+<p>That's a little more clear, but if you find writing that second parameter tedious, there is a better option. Use wish. First install it through <strong><code>npm install wish</code></strong>.</p>
+
+<p>Then our code becomes:</p>
+
+<pre data-type="programlisting">
+var checkHand = function(){ };
+var wish = require('wish');
+wish(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+</pre>
+
+<p>The error is clear without us specifying a message as a second parameter:</p>
+
+<pre data-type="programlisting">
+WishError:
+&nbsp;&nbsp; &nbsp;Expected "checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])"
+    to be equal(===) to "'pair'".</pre>
+
+<p>There is an idea in TDD that in order to ensure moving by small steps, you should only write enough code to make your tests pass.</p>
+
+<pre data-type="programlisting">
+var checkHand = function(){
+&nbsp; return 'pair';
+};
+var wish = require('wish');
+wish(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+/* wish(checkHand(['3-H', '3-C', '3-D',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '5-H', '2-H'])==='three of a kind'); */
+</pre>
+
+<p>When we run this, there are no failures. The file just runs and exits. If we used a test runner, it would give us a message like "all assertions passed!" or something. We'll do that later, but in any case, now that we have that test "green," it's time to either refactor, or write another test. There's no obvious refactoring here (we're mostly exploring testing, rather than refactoring in this chapter) so we're onto our next test. Conveniently, we already have it written, so we can just uncomment the last line:</p>
+
+<pre data-type="programlisting">
+var checkHand = function(){
+&nbsp; return 'pair';
+};
+var wish = require('wish');
+wish(checkHand(['2-H', '3-C', '4-D', '5-H', '2-C'])==='pair');
+wish(checkHand(['3-H','3-C','3-D','5-H','2-H'])==='three of a kind');</pre>
+
+<p>Now we get a new failure that is readable (rather than the <code>false == true</code> thing from assert).</p>
+
+<pre data-type="programlisting">
+WishError:
+&nbsp;&nbsp; &nbsp;Expected "checkHand(['3-H', '3-C', '3-D', '5-H', '2-H'])"
+    to be equal(===) to "'three of a kind'".</pre>
+
+<p>We know it's talking about the three of a kind line, so how do we fix it? If we are really, truly just writing the simplest code to make the test pass, we could write our function like this:</p>
+
+<pre data-type="programlisting">
+var checkHand = function(hand){
+&nbsp; if(hand[0]==='2-H' &amp;&amp; hand[1]==='3-C'
+     &amp;&amp; hand[2]==='4-D' &amp;&amp; hand[3]==='5-H'
+     &amp;&amp; hand[4]==='2-C'){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }
+};
+</pre>
+
+<p>This passes (no output when run), but this code reads with the same tone as a child taunting "not touching! can't get mad!" while hovering his hand above your face. While technically it passes, it is ready to break at the slightest change or expansion in test cases. Only this specific array will count as a <code>"pair"</code>, while any other hand will return <code>"three-of-a-kind"</code>. We would describe this code as <em>brittle</em>, rather than <em>robust</em>, for its inability to handle many test cases. We can also describe tests as "brittle" when they (the tests) are so coupled to the implementation that any minor change will break them. While this is true of our <code>pair</code> assertion here as well, it is this implementation, not the test case that is the problem.</p>
+
+<p>We started with high-level tests, but we're about to go deeper. For that reason, things are about to get into a more complicated pattern than just "red, green, refactor." We will have multiple levels of testing, and multiple failures at once, some of them persisting for a while. If we stick with our simple asserts, things will get confusing. Let's tool up and start testing with mocha. If you look through the docs for mocha (which you should at some point), you might be intimidated because it has a ton of features. Here, we're using the simplest set up possible.</p>
+
+<p>As we discussed at the beginning of the chapter, make sure that you have node, npm, and mocha installed, and that they can all be run from the command line. Assuming that's sorted, let's create a new file called check-hand-with-mocha.js and fill it out with the following code:</p>
+
+<pre data-type="programlisting">
+var wish = require('wish');
+
+function checkHand(hand) {
+&nbsp; if(hand[0]==='2-H' &amp;&amp; hand[1]==='3-C'
+&nbsp;&nbsp;&nbsp;&nbsp; &amp;&amp; hand[2]==='4-D' &amp;&amp; hand[3]==='5-H'
+&nbsp;&nbsp;&nbsp;&nbsp; &amp;&amp; hand[4]==='2-C'){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }
+};
+
+describe('checkHand()', function() {
+&nbsp; it('handles pairs', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['2-H', '3-C', '4-D', '5-H', '2-C']);
+&nbsp;&nbsp;&nbsp; wish(result === 'pair');
+&nbsp; });
+&nbsp; it('handles three of a kind', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['3-H', '3-C', '3-D', '5-H', '2-H']);
+&nbsp;&nbsp;&nbsp; wish(result === 'three of a kind');
+&nbsp; });
+});
+</pre>
+
+<aside data-type="sidebar" id="assertions-and-expectations-5yHYhZTl">
+<h5>Assertions and expectations</h5>
+
+<p>Among some of the biggest wastes of coders' time, as represented by numerous stack overflow questions, google searches, and enormous docs, and blog posts explaining the docs, doing assertions "right" is really up there. Mocha provides numerous ways to assert. You can do this:</p>
+
+<pre>
+assert.equal(foo, 'bar');</pre>
+
+<p>Or this:</p>
+
+<pre>
+expect(foo).to.equal('bar');</pre>
+
+<p>Or this:</p>
+
+<pre>
+foo.should.equal('bar');</pre>
+
+<p>This is all nonsense. We have a perfectly good equality test in JavaScript itself, all you need is something to wrap the code and throw an error:</p>
+
+<pre data-type="programlisting">
+assert(foo === 'bar');</pre>
+
+<p>But that gives a non-descriptive error (<code>AssertionError: false == true</code>), which is why we're using wish:</p>
+
+<pre data-type="programlisting">
+wish(foo === 'bar');</pre>
+
+<p>Which gives:</p>
+
+<pre data-type="programlisting">
+WishError:
+&nbsp;&nbsp; &nbsp;Expected "foo" to be equal(===) to " 'bar'".</pre>
+</aside>
+
+<p>&nbsp;</p>
+
+<p>What we're left with is basically the same thing, just in a form that mocha can use. The "describe" function indicates what function we are testing, and the "it" functions contain our assertions. The syntax for assertion has changed slightly, but these are the same tests we had before. And you can run them like this (make sure you're in the same directory as your file):</p>
+
+<pre data-type="programlisting">
+<strong>mocha check-hand-with-mocha.js</strong></pre>
+
+<figure id="id-QatAFXT2"><img alt="" class="imocha_resultspng" src="mocha_results.png">
+<figcaption><span class="label">Figure 4-2. </span>The output looks pretty good. Nice and clear.</figcaption>
+</figure>
+
+<div data-type="note" id="quick-tip-about-mocha-w5UliRTb"><h6>Note</h6>
+<h1>Quick tip about mocha</h1>
+
+<p>If you have a file named "test.js" or put your test file(s) inside of a directory called "test" then mocha will find your test file(s) without you specifying a name. If you set your files up like that, you can just run this: <strong><code>mocha</code></strong></p>
+</div>
+
+<p>Ok. Let's work on our <code>checkHand</code> function now. For proof that the <code>checkHand</code> pair checking is broken, add any other array that should count as a pair. Change the test to this:</p>
+
+<pre data-type="programlisting">
+describe('checkHand()', function() {
+&nbsp; it('handles pairs', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['2-H', '3-C', '4-D', '5-H', '2-C']);
+&nbsp;&nbsp;&nbsp; wish(result === 'pair');
+
+&nbsp;&nbsp;&nbsp; var anotherResult = checkHand(['3-H', '3-C', 
+                                   '4-D', '5-H', '2-C']);
+&nbsp;&nbsp;&nbsp; wish(anotherResult === 'pair');
+&nbsp; });
+&nbsp; it('handles three of a kind', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['3-H', '3-C', '3-D', '5-H', '2-H']);
+&nbsp;&nbsp;&nbsp; wish(result === 'three of a kind');
+&nbsp; });
+});
+</pre>
+
+<p>Now run mocha again. Three things to note here. First is that we can have multiple assertions inside of one <code>it</code> block. Second is that we get one failing test and one passing test. If any assertion in the <code>it</code> block fails, the whole <code>it</code> block fails. And third, as expected, we have a failure, a "red" state, and thus a <em>code-produced</em> impetus to change our implementation. Because there's no easy way out of this one, we're going to have to actually implement a function that checks for pairs. First, let's code the interface we want on this. Change the <code>checkHand</code> function to this:</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }
+};
+</pre>
+
+<p>Two failures! Of course, because we didn't implement the <code>isPair</code> function yet, as is clearly explained by the errors mocha gives us:</p>
+
+<pre data-type="programlisting">
+ReferenceError: isPair is not defined</pre>
+
+<p>Ok. Again doing just enough to shut the failures up, we write:</p>
+
+<pre data-type="programlisting">
+function isPair(){ };
+</pre>
+
+<p>Run mocha again... hey wait a second. We sure are running mocha a lot. What about those <em>watchers</em> we talked about in the previous chapter? Turns out that mocha has one built in! Cool. Let's run this command:</p>
+
+<pre data-type="programlisting">
+<strong>mocha -w check-hand-with-mocha.js</strong></pre>
+
+<p>Now whenever we save the file, we'll get a new report (<code>ctrl-c</code> to exit). Ok, but back to the tests, it's not really clear how to write the <code>isPair</code> function. We know we'll get a hand and output a <code>boolean</code>, but what should happen in between? Let's write another test for <code>isPair</code> itself that takes a hand as input, and outputs a <code>boolean</code>. We can put it above our first describe block:</p>
+
+<pre data-type="programlisting">
+...
+describe('isPair()', function() {
+&nbsp; it('finds a pair', function() {
+&nbsp;&nbsp;&nbsp; var result = isPair(['2-H', '3-C', '4-D', '5-H', '2-C']);
+&nbsp;&nbsp;&nbsp; wish(result);
+&nbsp; });
+});
+
+describe('checkHand()', function() {
+...
+</pre>
+
+<p>Because we're using the watcher, we see this failure as soon as we save. We could return <code>true</code> from that function to pass this new test, but we know that will just make the three of a kind tests fail, so let's actually implement this method. To check for pairs, we want to know how many duplicates are in the hand. What would <code>isPair</code> look like with our ideal interface? Maybe this:</p>
+
+<pre data-type="programlisting">
+function isPair(hand){
+&nbsp; return multiplesIn(hand) === 2;
+};
+</pre>
+
+<p>Naturally, errors because <code>multiplesIn</code> is not defined. We want to define the method, but also, we can now imagine a test for it as well.</p>
+
+<pre data-type="programlisting">
+function multiplesIn(hand){};
+
+describe('multiplesIn()', function() {
+&nbsp; it('finds a duplicate', function() {
+&nbsp;&nbsp;&nbsp; var result = multiplesIn(['2-H', '3-C', '4-D', '5-H', '2-C']);
+&nbsp;&nbsp;&nbsp; wish(result === 2);
+&nbsp; });
+});
+</pre>
+
+<p>Another failure. What would our ideal implementation of <code>multiplesIn</code> look like? At this point, let's assume that we should have a <code>highestCount</code> function that takes the values of the cards.</p>
+
+<pre data-type="programlisting">
+function multiplesIn(hand){
+&nbsp; return highestCount(valuesFromHand(hand));
+};
+</pre>
+
+<p>We'll get errors for <code>highestCount</code> and <code>valuesFromHand</code>. So let's give them empty implementations and tests that describe their ideal interface (the parameters we'd like to pass, and the results we'd like to get).</p>
+
+<pre data-type="programlisting">
+function highestCount(values){};
+function valuesFromHand(hand){};
+
+describe('valuesFromHand()', function() {
+&nbsp; it('returns just the values from a hand', function() {
+&nbsp;&nbsp;&nbsp; var result = valuesFromHand(['2-H', '3-C', '4-D', '5-H', '2-C']);
+&nbsp;&nbsp;&nbsp; wish(result === ['2', '3', '4', '5', '2']);
+&nbsp; });
+});
+
+describe('highestCount()', function() {
+&nbsp; it('returns count of the most common card from array',
+    function() {
+&nbsp;&nbsp;&nbsp;   var result = highestCount(['2', '4', '4', '4', '2']);
+&nbsp;&nbsp;&nbsp;   wish(result === 3);
+&nbsp;   }
+  );
+});
+
+</pre>
+
+<p>Implementing the <code>valuesFromHand</code> function seems simple, so let's do that:</p>
+
+<pre data-type="programlisting">
+function valuesFromHand(hand){
+&nbsp; return hand.map(function(card){
+&nbsp;&nbsp;&nbsp; return card.split('-')[0];
+&nbsp; })
+}
+</pre>
+
+<p>Failure?!</p>
+
+<pre data-type="programlisting">
+Expected "result" to be equal(===) to " ['2', '3', '4', '5', '2']".
+</pre>
+
+<p>Certainly <code>split</code> is working as expected, right? What about a hardcoded version:</p>
+
+<pre data-type="programlisting">
+wish(['2', '3', '4', '5', '2'] === ['2', '3', '4', '5', '2']);
+</pre>
+
+<p>That gives us:</p>
+
+<pre data-type="programlisting">
+Expected "['2', '3', '4', '5', '2'] " 
+to be equal(===) to " ['2', '3', '4', '5', '2']".</pre>
+
+<p>Wait a second, aren't those arrays equal? Unfortunately, not according to JavaScript. Primitives like integers, booleans, and strings work fine with <code>===</code>, but objects (and arrays are objects under the hood) will only work with <code>===</code> if we are testing variables that reference the same object.</p>
+
+<pre data-type="programlisting">
+x = []
+y = []
+x === y; // false</pre>
+
+<p>However:</p>
+
+<pre data-type="programlisting">
+x = [];
+y = x;
+x === y; // true
+</pre>
+
+<p>If you want to solve this with a more complicated assertion library, you can. Most have support for something like <code>assert.deepEqual</code>, which check the contents of the objects. But we want to keep our assertions simple, and just have plain old JavaScript syntax inside of the <code>wish()</code> assertions. Additionally, we might reasonably want to check equality of arrays or objects elsewhere in our program.</p>
+
+<p>Rather than build <code>deepEqual</code> ourselves or bring in one that's tied to an assertion or testing framework, let's use a standalone library:</p>
+
+<pre data-type="programlisting">
+<strong>npm install deep-equal</strong></pre>
+
+<p>Now in our test, we can do the following:</p>
+
+<pre data-type="programlisting">
+var deepEqual = require('deep-equal');
+...
+describe('valuesFromHand()', function() {
+&nbsp; it('returns just the values from a hand', function() {
+&nbsp;&nbsp;&nbsp; var result = valuesFromHand(['2-H', '3-C', '4-D', '5-H', '2-C']);
+&nbsp;&nbsp;&nbsp; wish(deepEqual(result, ['2', '3', '4', '5', '2']));
+&nbsp; });
+});</pre>
+
+<p>Now it works. Awesome. Next up, let's implement <code>highestCount</code>.</p>
+
+<pre data-type="programlisting">
+function highestCount(values){
+&nbsp; var counts = {};
+&nbsp; values.forEach(function(value, index){
+&nbsp;&nbsp;&nbsp; counts[value]= 0;
+&nbsp;&nbsp;&nbsp; if(value == values[0]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[1]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[2]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[3]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[4]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp; });
+&nbsp; var totalCounts = Object.keys(counts).map(function(key){
+&nbsp;&nbsp;&nbsp; return counts[key];
+&nbsp; });
+&nbsp; return totalCounts.sort(function(a,b){return b-a})[0];
+};
+</pre>
+
+<p>It's not pretty, but it passes the test. In fact, it passes all of them! Which means we're ready to implement something else.</p>
+
+<p>You probably can see some potential refactoring in this function. That's great. It's not a very good implementation, but the first implementation of something often is not. That's the advantage of having tests. We can happily ignore this working, but ugly function because it satisfies the right inputs and outputs. We could bring in a more sophisticated functional library like Ramda (Chapter 11) to handle array manipulation, or Array's built in <code>reduce</code> (refactoring using <code>reduce</code> is covered in Chapter 7) to build our object, but for now <code>forEach</code> works fine.</p>
+
+<p>Moving on, let's actually handle three of a kind.</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else if(isTriple(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }
+};
+</pre>
+
+<p>"Undefined Error" for <code>isTriple</code>. This time though, we already have a known test case, so implementation is obvious.</p>
+
+<pre data-type="programlisting">
+function isTriple(hand){
+&nbsp; return multiplesIn(hand) === 3;
+};
+</pre>
+
+<p>We don't have a test specifically for <code>isTriple</code>, but the high level test should give us enough confidence to move on. For the same confidence on four of a kind, all we need is another high-level test, another it block in the <code>checkHand</code> test:</p>
+
+<pre data-type="programlisting">
+describe('checkHand()', function() {
+...
+&nbsp; it('handles four of a kind', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['3-H', '3-C', '3-D', '3-S', '2-H']);
+&nbsp;&nbsp;&nbsp; wish(result === 'four of a kind');
+&nbsp; });
+...
+</pre>
+
+<p>And the implementation:</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else if(isTriple(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }else if(isQuadruple(hand)){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }
+};
+
+function isQuadruple(hand){
+&nbsp; return multiplesIn(hand) === 4;
+};
+</pre>
+
+<p>Next, let's write a test for the high card, which means another <code>it</code> block in the <code>checkHand</code> test.</p>
+
+<pre data-type="programlisting">
+&nbsp; it('handles high card', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['2-H', '5-C', '9-D', '7-S', '3-H']);
+&nbsp;&nbsp;&nbsp; wish(result === 'high card');
+&nbsp; });
+</pre>
+
+<p>Failure. Red. And here's the implementation:</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else if(isTriple(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }else if(isQuadruple(hand)){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'high card';
+&nbsp; }
+}
+</pre>
+
+<p>Green. Passing. Let's take care of flush with another high level test in the <code>checkHand</code> section.</p>
+
+<pre data-type="programlisting">
+it('handles flush', function() {
+&nbsp; var result = checkHand(['2-H', '5-H', '9-H', '7-H', '3-H']);
+&nbsp; wish(result === 'flush');
+});
+</pre>
+
+<p>Failure. It doesn't meet any of the conditions, so our test reports as high card. The ideal interface is:</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else if(isTriple(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }else if(isQuadruple(hand)){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }else if(isFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'flush';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'high card';
+&nbsp; }
+};
+</pre>
+
+<p><code>UndefinedError</code> for <code>isFlush</code>. So we want:</p>
+
+<pre data-type="programlisting">
+function isFlush(hand){ }</pre>
+
+<p>Which returns <code>undefined</code>, so we get a failure because we're still going to hit the high card (<code>else</code>) path. We're going to need to check that the suits are all the same. Let's assume we need two functions for that, changing our <code>isFlush</code> implementation to the following:</p>
+
+<pre data-type="programlisting">
+function isFlush(hand){
+&nbsp; return allTheSameSuit(suitsFor(hand));
+};
+</pre>
+
+<p>Undefined errors for those new functions. We could write the boilerplate, but the <code>allTheSameSuit</code> function seems pretty obvious to implement.&nbsp; Let's do that first. But since we have two functions that are new, we'll write a test so that we can be sure that <code>allTheSameSuit</code> is working as expected.</p>
+
+<pre data-type="programlisting">
+function allTheSameSuit(suits){
+&nbsp; suits.forEach(function(suit){
+&nbsp;&nbsp;&nbsp; if(suit !== suits[0]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; return false;
+&nbsp;&nbsp;&nbsp; }
+&nbsp; })
+&nbsp; return true;
+}
+
+describe('allTheSameSuit()', function() {
+&nbsp; it('reports true if elements are the same', function() {
+&nbsp;&nbsp;&nbsp; var result = allTheSameSuit(['D', 'D', 'D', 'D', 'D']);
+&nbsp;&nbsp;&nbsp; wish(result);
+&nbsp; });
+});
+</pre>
+
+<p>Passing. But naturally, we still have an undefined error for <code>suitsFor</code>. It's pretty similar to our <code>valuesFromHand</code> function, so we're going to move on without a test. Feel free to write one if you want to stay in the test-first mode.</p>
+
+<pre data-type="programlisting">
+function suitsFor(hand){
+&nbsp; return hand.map(function(card){
+&nbsp;&nbsp;&nbsp; return card.split('-')[1];
+&nbsp; })
+};
+</pre>
+
+<p>Uh oh! Our flush condition seems to be returning true for our high card as well. Error:</p>
+
+<pre data-type="programlisting">
+&nbsp; 1) checkHand() handles high card:
+&nbsp;&nbsp;&nbsp;&nbsp; WishError:
+&nbsp;&nbsp; &nbsp;Expected "result" to be equal(===) to " 'high card'".
+</pre>
+
+<p>That must mean that <code>allTheSameSuit</code> is also returning true. We introduced a bug, so it's time for a regression test. First, we reproduce the behavior with a test. We didn't test the <code>allTheSameSuit</code> function would actually return false when they aren't all the same. Let's add that test now.</p>
+
+<pre data-type="programlisting">
+describe('allTheSameSuit()', function() {
+...
+&nbsp; it('reports false if elements are not the same', function() {
+&nbsp;&nbsp;&nbsp; var result = allTheSameSuit(['D', 'H', 'D', 'D', 'D']);
+&nbsp;&nbsp;&nbsp; wish(!result);
+&nbsp; });
+});
+</pre>
+
+<p>Two failures, which means we reproduced the bug (and still have the original). Apparently, our <code>return false</code> was only returning from the loop. Let's change our implementation.</p>
+
+<pre class="pre drop-element-attached-top drop-element-attached-center drop-target-attached-bottom drop-target-attached-center" data-type="programlisting">
+function allTheSameSuit(suits){
+&nbsp; var toReturn = true;
+&nbsp; suits.forEach(function(suit){
+&nbsp;&nbsp;&nbsp; if(suit !== suits[0]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; toReturn = false;
+&nbsp;&nbsp;&nbsp; }
+&nbsp; });
+&nbsp; return toReturn;
+};
+</pre>
+
+<p>And now all of our tests are passing again.</p>
+
+<p>There's a better way to handle this <code>forEach</code>, by using Ramda (or Sanctuary, underscore, lodash, etc.) or digging into JavaScript's native <code>Array</code> functions a bit more (keeping in mind that using native functions requires us to check their availability on our target platform), but this was the easiest thing that passed the tests. We want our code to be readable, correct, good, and fast: in that order.</p>
+
+<p>Only a few hands left. Let's do the straight. First a high-level test:</p>
+
+<pre data-type="programlisting">
+describe('checkHand()', function() {
+...
+  it('handles straight', function() {
+&nbsp;   var result = checkHand(['1-H', '2-H', '3-H', '4-H', '5-D']);
+&nbsp;   wish(result === 'straight');
+  });
+});
+</pre>
+
+<p>The code is hitting the <code>else</code> clause for "high card." That's good. We know then that there aren't any competing conditions and are free to add one to <code>checkHand</code>.</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else if(isTriple(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }else if(isQuadruple(hand)){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }else if(isFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'flush';
+&nbsp; }else if(isStraight(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'high card';
+&nbsp; }
+}
+</pre>
+
+<p><code>isStraight</code> is not defined. Let's define it, and its ideal interface in one step. We'll skip the test for <code>isStraight</code>, since it would be redundant with the high-level test.</p>
+
+<pre data-type="programlisting">
+function isStraight(hand){
+&nbsp; return cardsInSequence(valuesFromHand(hand));
+};</pre>
+
+<p>Error. We need to define <code>cardsInSequence</code>. What should it look like?</p>
+
+<pre data-type="programlisting">
+function cardsInSequence(values){
+&nbsp; var sortedValues = values.sort();
+&nbsp; return fourAway(sortedValues) &amp;&amp; noMultiples(values);
+};
+</pre>
+
+<p>Two undefined functions. We'll add tests for both of these. First, let's get a passing test for <code>fourAway</code>:</p>
+
+<pre data-type="programlisting">
+function fourAway(values){
+&nbsp; return ((+values[values.length-1] - 4 - +values[0])===0);
+};
+
+describe('fourAway()', function() {
+&nbsp; it('reports true if first and last are 4 away', function() {
+&nbsp;&nbsp;&nbsp; var result = fourAway(['2', '6']);
+&nbsp;&nbsp;&nbsp; wish(result);
+&nbsp; });
+});
+</pre>
+
+<p>Note that these <code>+</code> signs in line 2 are turning strings into numbers. If that seems hard to read, unidiomatic, or just likely to be changed without someone realizing the importance, use this line with <code>parseInt</code> instead:</p>
+
+<pre data-type="programlisting">
+return ((parseInt(values[values.length-1]) - 4 - parseInt(values[0]))===0);</pre>
+
+<p>Onto <code>noMultiples</code>. We'll write a negative test case here, just for added assurance. The implementation turns out to be simple though, because we already have something to count cards for us.</p>
+
+<pre data-type="programlisting">
+function noMultiples(values){
+&nbsp; return highestCount(values)==1;
+};
+
+describe('noMultiples()', function() {
+&nbsp; it('reports true when all elements are different', function() {
+&nbsp;&nbsp;&nbsp; var result = noMultiples(['2', '6']);
+&nbsp;&nbsp;&nbsp; wish(result);
+&nbsp; });
+&nbsp; it('reports false when two elements are the same', function() {
+&nbsp;&nbsp;&nbsp; var result = noMultiples(['2', '2']);
+&nbsp;&nbsp;&nbsp; wish(!result);
+&nbsp; });
+});
+</pre>
+
+<p>All tests are passing. Onto <code>StraightFlush</code>. Let's add this to our high-level <code>checkHand</code> describe block:</p>
+
+<pre data-type="programlisting">
+describe('checkHand()', function() {
+...
+&nbsp; it('handles straight flush', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['1-H', '2-H', '3-H', '4-H', '5-H']);
+&nbsp;&nbsp;&nbsp; wish(result === 'straight flush');
+&nbsp; });
+});
+</pre>
+
+<p>It seems to be hitting the flush condition, so we'll have to add this check above that in the <code>if</code>/<code>else</code> clause.</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else if(isTriple(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }else if(isQuadruple(hand)){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }else if(isStraightFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight flush';
+&nbsp; }else if(isFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'flush';
+&nbsp; }else if(isStraight(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'high card';
+&nbsp; }
+}</pre>
+
+<p><code>isStraightFlush</code> is not defined. Since this code is just the result of two functions, we won't worry about a low-level test for it. Feel free to write one though.</p>
+
+<pre data-type="programlisting">
+function isStraightFlush(hand){
+&nbsp; return isStraight(hand) &amp;&amp; isFlush(hand);
+}
+</pre>
+
+<p>It passes. Only two left: two pair and full house. Let's do full house first, starting with a high level test.</p>
+
+<pre data-type="programlisting">
+describe('checkHand()', function() {
+...
+&nbsp; it('handles full house', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['2-D', '2-H', '3-H', '3-D', '3-C']);
+&nbsp;&nbsp;&nbsp; wish(result === 'full house');
+&nbsp; });
+});
+</pre>
+
+<p>The code is following the "three of a kind" branch of the <code>checkHand</code> conditional, so we want the <code>isFullHouse</code> check to go above that.</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'pair';
+&nbsp; }else if(isFullHouse(hand)){
+&nbsp;&nbsp;&nbsp; return 'full house';
+&nbsp; }else if(isTriple(hand)){
+&nbsp;&nbsp;&nbsp; return 'three of a kind';
+&nbsp; }else if(isQuadruple(hand)){
+&nbsp;&nbsp;&nbsp; return 'four of a kind';
+&nbsp; }else if(isStraightFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight flush';
+&nbsp; }else if(isFlush(hand)){
+&nbsp;&nbsp;&nbsp; return 'flush';
+&nbsp; }else if(isStraight(hand)){
+&nbsp;&nbsp;&nbsp; return 'straight';
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; return 'high card';
+&nbsp; }
+};</pre>
+
+<p>Now we need to implement the function, <code>isFullHouse</code>. It looks like what we need is buried inside of <code>highestCount</code>. It just returns the top one, but we want them all. Basically, you need everything from that function except for the very last three characters. What kind of subtle, elegant thing should we do to avoid just duplicating the code?</p>
+
+<pre data-type="programlisting">
+function allCounts(values){
+&nbsp; var counts = {};
+&nbsp; values.forEach(function(value, index){
+&nbsp;&nbsp;&nbsp; counts[value]= 0;
+&nbsp;&nbsp;&nbsp; if(value == values[0]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[1]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[2]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[3]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp;&nbsp;&nbsp; if(value == values[4]){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; counts[value] = counts[value] + 1;
+&nbsp;&nbsp;&nbsp; };
+&nbsp; });
+&nbsp; var totalCounts = Object.keys(counts).map(function(key){
+&nbsp;&nbsp;&nbsp; return counts[key];
+&nbsp; });
+&nbsp; return totalCounts.sort(function(a,b){return b-a});
+};
+</pre>
+
+<p>Nothing! Don't try to be elegant. Duplicate the code. Copying and pasting is often the smallest and safest step you can take. Although copying and pasting gets a bad rap, it is absolutely a better <em>first step</em> than trying to extract functions (and other structures) and break too many things at once (especially if you've strayed too far from your last <code>git commit</code>!). The real problem comes from <em>leaving</em> the duplication, which is a very serious maintenance concern. But the best time to deal with this is in the <em>refactor</em> step of the red/green/refactor cycle. Not while you're trying to get tests to pass in the <em>green</em> phase.</p>
+
+<aside data-type="sidebar" id="theres-nothing-wrong-with-terrible-code-Z0HQocQT2">
+<h5>There's nothing wrong with terrible code</h5>
+
+<p>As the above paragraph should make clear, bad code is fine. Unused functions are fine. Bad variable names are fine. Duplicate code if it helps you get to the place where you can refactor easier. Inline functions to extract more meaningful ones: it doesn't matter if that makes your function longer in the short term. Create a bunch of functions that you don't end up using while you're figuring out which one you need.</p>
+
+<p>There's nothing wrong with writing terrible code. It's easier to start there, and fix it after. Just remember to fix it after. What happens in your editor, stays in your editor (until you replace it with better code).</p>
+</aside>
+
+<p>&nbsp;</p>
+
+<p>Notice that we've left out the <code>[0]</code> because we want all of the results. Now all that's left is the <code>isFullHouse</code> implementation.</p>
+
+<pre data-type="programlisting">
+function isFullHouse(hand){
+&nbsp; var theCounts = allCounts(valuesFromHand(hand));
+&nbsp; return(theCounts[0]===3 &amp;&amp; theCounts[1]===2);
+};</pre>
+
+<p>Works. Great. Two pair and we're done.</p>
+
+<pre data-type="programlisting">
+describe('checkHand()', function() {
+...
+&nbsp; it('handles two pair', function() {
+&nbsp;&nbsp;&nbsp; var result = checkHand(['2-D', '2-H', '3-H', '3-D', '8-D']);
+&nbsp;&nbsp;&nbsp; wish(result === 'two pair');
+&nbsp; });
+});</pre>
+
+<p>This is catching on the <code>pair</code> condition. That means the <code>isTwoPair</code> check will have to go before the isPair check in the conditional.</p>
+
+<pre data-type="programlisting">
+function checkHand(hand) {
+&nbsp; if(isTwoPair(hand)){
+&nbsp;&nbsp;&nbsp; return 'two pair';
+&nbsp; } else if(isPair(hand)){
+...
+</pre>
+
+<p>And then an implementation that looks a terrific amount like full house.</p>
+
+<pre data-type="programlisting">
+function isTwoPair(hand){
+&nbsp; var theCounts = allCounts(valuesFromHand(hand));
+&nbsp; return(theCounts[0]===2 &amp;&amp; theCounts[1]===2);
+};
+</pre>
+
+<p>And we're done! That's how you start new code with tests, and maintain confidence throughout. The rest of the book is about refactoring. This chapter is how to write lots and lots of tests. There is a ton of duplication in the code and the tests. The amount of loops and conditionals is too high. There is barely any information hiding, and there are no attempts at private methods. No classes. No libraries that elegantly do loop-like work. It's all synchronous. And we definitely have some gaps when it comes to representing face cards.</p>
+
+<p>But for the functionality it has, it is well tested, and in places that it's not, because we have a functioning test suite in place, it's easy to add more. We even had a chance to try out writing regression tests for bugs.</p>
+</section>
+
+<section data-type="sect1" id="untested-code-and-characterization-tests-7nszsw">
+<h1>Untested Code and Characterization Tests</h1>
+
+<p>Ok. So here's the scenario:</p>
+
+<p>The code for randomly generating a hand of cards was written by a coworker. He's taken 2 months off to prepare for Burning Man, and the team is suspicious that he'll never <em>really</em> come back. You can't get in touch with him and he didn't write any tests.</p>
+
+<p>Here, you have 3 options. First, you could rewrite the code from scratch. Especially for bigger projects, this is risky and could take a long time. Not recommended. Second, you could change the code as needed, without any tests. See Chapter 1 for a description of the difference between "changing code" and "refactoring." Also not recommended. Your third and best option is to add tests.</p>
+
+<p>Here is his code (save it as random-hand.js):</p>
+
+<pre data-type="programlisting">
+var s = ['H', 'D', 'S', 'C'];
+var v = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+var c = [];
+var rS = function(){
+&nbsp; return s[Math.floor(Math.random()*(s.length))];
+};
+var rV = function(){
+&nbsp; return v[Math.floor(Math.random()*(v.length))];
+};
+var rC = function(){
+&nbsp;return rV() + '-' + rS();
+};
+
+var doIt = function(){
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+};
+doIt();
+console.log(c);
+</pre>
+
+<p>Pretty cryptic. Sometimes when you see code that you don't understand, it's right next to data that's very important. And also, the confusing code won't seem to work without it. Those situations are tougher, but here, we can get this in a <em>test harness</em> (exercising the code through tests) fairly easily. We'll talk about variable names later, but for now, recognize that getting this under test does not depend on good variable names, or even understanding the code very well.</p>
+
+<p>If we were using assert, we'd write a characterization test like this (you can put this test code at the bottom of the code above, and run it with <strong><code>mocha random-hand.js</code></strong>):</p>
+
+<pre data-type="programlisting">
+const assert = require('assert');
+describe('doIt()', function() {
+&nbsp; it('returns nothing', function() {
+&nbsp;&nbsp;&nbsp; var result = doIt();
+&nbsp;&nbsp;&nbsp; assert.equal(result, null);
+&nbsp; });
+});</pre>
+
+<p>That is, we'd just assume that the function returns nothing. And when we assume nothing from the code, normally it protests through the tests, "I beg your pardon, I'm actually returning <em>something</em> when I'm called with no arguments, thank you very much." This is called a <em>characterization test</em>. Sometimes (like in this case) the tests will pass though, because the tests actually do return <code>null</code>, or whatever other value we'd provide as the second parameter to <code>assert.equal</code>. When we use <code>assert.equal</code> like this, the test passes, because <code>null == undefined</code>. If we instead <code>assert(result === null);</code>, we're left with this gem of an error:</p>
+
+<pre data-type="programlisting">
+AssertionError: false == true</pre>
+
+<p>Neither one of those is helpful. Yes, we could get a better error with a different arbitrary value that JavaScript won't coerce to a value that happens to be the equal in some way to the output of a function. For instance, we'd get a decent error like this:</p>
+
+<pre data-type="programlisting">
+assert.equal(result, 3);
+AssertionError: undefined == 3
+</pre>
+
+<p>But personally, I'd like to avoid thinking about different types of equality and coercion as much as possible when writing characterization tests. So instead of using assert for characterization tests, we'll use wish's characterization test mode. It's activated by adding a second parameter of <code>true</code> to the call to wish, like this:</p>
+
+<pre data-type="programlisting">
+wish(<em>whateverValueIAmChecking</em>, true);</pre>
+
+<p>You can add the following code (replace the assert based test) to the bottom of the file and run it with <strong><code>mocha random-hand.js </code></strong></p>
+
+<pre data-type="programlisting">
+const wish = require('wish');
+describe('doIt()', function() {
+&nbsp; it('returns something', function() {
+&nbsp;&nbsp;&nbsp; wish(doIt(), true);
+&nbsp; });
+});
+describe('rC()', function() {
+&nbsp; it('returns something', function() {
+&nbsp;&nbsp;&nbsp; wish(rC(), true);
+&nbsp; });
+});
+describe('rV()', function() {
+&nbsp; it('returns something', function() {
+&nbsp;&nbsp;&nbsp; wish(rV(), true);
+&nbsp; });
+});
+describe('rS()', function() {
+&nbsp; it('returns something', function() {
+&nbsp;&nbsp;&nbsp; wish(rS(), true);
+&nbsp; });
+});
+</pre>
+
+<p>And the test errors tell us what we need to know:</p>
+
+<pre data-type="programlisting">
+WishCharacterization: doIt() evaluated to undefined
+WishCharacterization: rC() evaluated to "3-C"
+WishCharacterization: rV() evaluated to "7"
+WishCharacterization: rS() evaluated to "H"
+</pre>
+
+<p>Our failures tell us what the code did, at least in terms of what type of return values we're dealing with. However, the <code>doIt</code> function returns <code>undefined</code> which usually means there's a side-effect in that code (unless the function actually does nothing at all, in which case, it's dead code and we'd remove it).</p>
+
+<div data-type="note" id="about-side-effects-gwUbILsZ"><h6>Note</h6>
+<h1>About side-effects</h1>
+
+<p>A side-effect means something like printing, altering a variable, or changing a database value. In some circles, immutability is very cool and side-effects are very uncool. In JavaScript, how side-effect friendly you are depends on which JavaScript you're writing (Chapter 2) as well as your personal style. Aiming to <em>minimize</em> side-effects is generally in line with the goals of this book. <em>Eliminating</em> them is an altogether different thing. We'll talk about them throughout the book, but the deepest dive is in Chapter 11.</p>
+</div>
+For the non-null returning functions, <strong>you can just plug in input values and assert whatever is returned by the test</strong>. That is the second part of a characterization test. If there aren't side effects, you never even have to look at the implementation! It's just inputs and outputs.
+
+<p>But there's a catch in this code. It's not deterministic! If we just plugged values into wish assertions, our tests would only work on rare occasions.</p>
+
+<p>The reason is that randomness is involved in these functions. It's a little trickier, but we can just use a <em>regex</em> (or "Regular Expression") to cover the variations in outputs. We can delete our characterization tests, and replace them with the following.</p>
+
+<pre data-type="programlisting">
+describe('rC()', function() {
+&nbsp; it('returns match for card', function() {
+&nbsp;&nbsp;&nbsp; wish(rC().match(/\w{1,2}-[HDSC]/));
+&nbsp; });
+});
+describe('rV()', function() {
+&nbsp; it('returns match for card value', function() {
+&nbsp;&nbsp;&nbsp; wish(rV().match(/\w{1,2}/));
+&nbsp; });
+});
+describe('rS()', function() {
+&nbsp; it('returns match for suit', function() {
+&nbsp;&nbsp;&nbsp; wish(rS().match(/[HDSC]/));
+&nbsp; });
+});
+</pre>
+
+<p>Because these three functions simply take input and output, we're done with these ones. What to do about our <code>undefined</code>-returning <code>doIt</code> function though?</p>
+
+<p>We have options here. If this is part of a multi-file program, first, we need to make sure that the variable <code>c</code> isn't accessed anywhere else. It's hard to do with a one letter variable name, but if you're sure it's confined to this file, we can just move the first line where <code>c</code> is defined and return it inside the <code>doIt</code> function like this:</p>
+
+<pre data-type="programlisting">
+var doIt = function(){
+&nbsp; var c = [];
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+&nbsp; c.push(rC());
+&nbsp; return c;
+};
+console.log(c);</pre>
+
+<p>Now we've broken the <code>console</code> output. The <code>console.log(c)</code> statement no longer knows what <code>c</code> is. This is a simple fix. We just replace it with the function call.</p>
+
+<pre data-type="programlisting">
+console.log(doIt());</pre>
+
+<p>We still need a <code>doIt</code> test. Let's use a characterization test again:</p>
+
+<pre data-type="programlisting">
+describe('doIt()', function() {
+&nbsp; it('does something', function() {
+&nbsp;&nbsp;&nbsp; wish(doIt(), true);
+&nbsp; });
+});
+</pre>
+
+<p>This gives us back something like:</p>
+
+<pre data-type="programlisting">
+WishCharacterization: doIt() evaluated to 
+  ["7-S","8-S","9-H","4-D","J-H"]
+</pre>
+
+<p>Specifically, it returns what looks like the results of five calls to <code>rC</code>. For the test, we could use a regex to check every element of this array, but we already test <code>rC</code> like that. We probably don't want the brittleness of a high level test like that. If we decide to change the format of <code>rC</code>, we don't want two tests two become invalid. So what's a good high-level test here? Well, what's unique about the <code>doIt</code> function is that it returns 5 of something. Let's test that.</p>
+
+<pre data-type="programlisting">
+describe('doIt()', function() {
+&nbsp; it('returns something with a length of 5', function() {
+&nbsp;&nbsp;&nbsp; wish(doIt().length === 5);
+&nbsp; });
+});
+</pre>
+
+<p>For smaller code bases that you want to get "in a test harness" or "under test," this process works well. For larger code bases, even with approval and enthusiasm from management and other developers, it is impractical to go from 0 (or even 50) percent coverage all the way to 100% in a short time via a process like this.</p>
+
+<p>In those cases, you may identify some high priority sections to get under test through this process. You'll want to target areas that are especially: lacking in test coverage, core to the application, very low quality, have a high "churn rate" (files and sections that frequently change), or some combination of all of these.</p>
+
+<p>Another adaptation you can make is to adopt a process that insists on certain quality standards or code coverage rates for all new code. See the previous chapter for some types of tools and processes that will help you with this. Over time, your high-quality and well-tested new (and changed) lines will begin to dwarf the older, more "legacy" sections of the code base. This is what <em>paying off technical debt</em> looks like. It begins with getting code coverage, and then continues through refactoring. Keep in mind that for larger code bases, it takes months, not a weekend of heroic effort from the team, and certainly not from one particularly enthusiastic developer.</p>
+
+<p>Alongside process improvements and emphasizing quality on new changes to the code, one additional policy is worth considering. If the code is live and has people using it, even if it is poorly tested and low quality, it should be looked at with some skepticism, but not too critically. The implications are that: "changing code" that is not under test should be avoided, the programmers who wrote the "legacy" code should not be marginalized or insulted (they often understand the business logic better than newer programmers), and bugs should be handled on an ad hoc basis by writing <em>regression tests</em> (detailed in the next section). Also, since code in use <em>is</em> exercised (although unfortunately by the people using it rather than a test suite) it's possible that you can be <em>slightly</em> more confident in it than in new code.</p>
+
+<p>To recap, if you find yourself with a larger legacy code base with poor coverage, identify small sections to get under test and use the process from this "Untested Code" section, adopt a policy of complete or majority coverage for new work and use the process for "New features" or "New Code from Scratch (with or without TDD)" sections, and write regression tests for bugs that come up. Along the way, try not to insult the programmers who wrote the legacy code, whether they're still with the team or not.</p>
+</section>
+
+<section data-type="sect1" id="debugging-and-regression-tests-0Rs7F6">
+<h1>Debugging and Regression Tests</h1>
+
+<p>After writing the tests from the last section, we've successfully created an automated way to confirm that the code works. We should be happy with getting the random hand generator "under test" or "in a test harness," because now we can confidently refactor, add features, or fix bugs.</p>
+
+<div data-type="warning" id="beware-of-the-urge-to-just-fix-the-code-GYUJfmF8"><h6>Warning</h6>
+<h1>Beware of the urge to "just fix the code!"</h1>
+
+<p>Sometimes, a bug looks easy to fix. It's tempting to "just fix the code," but what stops the bug from coming back? If you write a "regression test," like we do here, you can squash it for good.</p>
+
+<p>A related, but distinct impulse is to "fix code that looks ugly or would probably cause bugs." The code could even be something that you identify as causing a bug. Unless you have a test suite in place, don't "just fix" this code either. This is "just changing code," and not "refactoring."</p>
+</div>
+
+<p>And that's a good thing. Here's the scenario:</p>
+
+<p>We've just encountered a bug in the code that made it into production. The bug report says that sometimes, players get multiple versions of the same card.</p>
+
+<p>The implications are dire. Certain hands, like four-of-a-kind are far more likely than expected (and <em>five</em> of a kind is even possible!). The competing online casinos have a perfectly working card dealing system, and people playing our game are losing trust in our faulty one.</p>
+
+<p>So what's wrong with the code? Let's take a look:</p>
+
+<pre data-type="programlisting">
+var suits = ['H', 'D', 'S', 'C'];
+var values = ['1', '2', '3', '4', '5', '6',
+              '7', '8', '9', '10', 'J', 'Q', 'K'];
+var randomSuit = function(){
+&nbsp; return suits[Math.floor(Math.random()*(suits.length))];
+};
+var randomValue = function(){
+&nbsp; return values[Math.floor(Math.random()*(values.length))];
+};
+var randomCard = function(){
+&nbsp;return randomValue() + '-' + randomSuit();
+};
+
+var randomHand = function(){
+&nbsp; var cards = [];
+&nbsp; cards.push(randomCard());
+&nbsp; cards.push(randomCard());
+&nbsp; cards.push(randomCard());
+&nbsp; cards.push(randomCard());
+&nbsp; cards.push(randomCard());
+&nbsp; return cards;
+};
+console.log(randomHand());
+</pre>
+
+<p>First thing to notice is that yes, the variable and function names have been expanded to make the code more clear. That also breaks all of the tests. Can you reproduce the test coverage from scratch without just renaming the variables? If you want to try it on your own first, go for it, but in either case, here are the tests:</p>
+
+<pre data-type="programlisting">
+var wish = require('wish');
+var deepEqual = require('deep-equal');
+describe('randomHand()', function() {
+&nbsp; it('returns 5 randomCards', function() {
+&nbsp;&nbsp;&nbsp; wish(randomHand().length === 5);
+&nbsp; });
+});
+describe('randomCard()', function() {
+&nbsp; it('returns nothing', function() {
+&nbsp;&nbsp;&nbsp; wish(randomCard().match(/\w{1,2}-[HDSC]/));
+&nbsp; });
+});
+describe('randomValue()', function() {
+&nbsp; it('returns nothing', function() {
+&nbsp;&nbsp;&nbsp; wish(randomValue().match(/\w{1,2}/));
+&nbsp; });
+});
+describe('randomSuit()', function() {
+&nbsp; it('returns nothing', function() {
+&nbsp;&nbsp;&nbsp; wish(randomSuit().match(/[HDSC]/));
+&nbsp; });
+});
+</pre>
+
+<p>First, we want to reproduce the problem somehow. Let's try running this code (without the tests or mocha, so comment the tests lines out for now, but leave the <code>console.log(randomHand());</code>) using just node. Did you see the same card twice? Try running it again. How many times did it take to reproduce the bug?</p>
+
+<p>With the manual testing (See Chapter 3) approach it can take a while, and be hard to see the error even when it does show up. Our next step is writing a test to exercise the code and attempt to produce the error. Note that we want a failing test before we write any code. Our first instinct might be to write a test like this:</p>
+
+<pre data-type="programlisting">
+describe('randomHand()', function() {
+&nbsp; ...
+  for(var i=0; i&lt;100; i++){
+&nbsp;&nbsp;&nbsp; it('should not have the first two cards be the same', function() {
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; var result = randomHand();
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; wish(result[0] !== result[1]);
+&nbsp;&nbsp;&nbsp; });
+&nbsp; };
+});
+</pre>
+
+<p>This will produce failures fairly often, but isn't a great test for two reasons, both having to do with the randomness. First, by requiring many iterations of the code to be exercised, we've created a test that is sure to be fairly slow. Second, our test won't always reproduce the error and fail. We could increase the number of test runs to make not getting a failure virtually impossible, but that will necessarily will slow our system down further.</p>
+
+<p>In spite of this not being a great test, we can use it as scaffolding to change our <code>randomHand</code> function. We don't want to change the format of the output, but our implementation is off. We can use as many iterations of the functions as we need to (almost) guarantee observing the failure in action.</p>
+
+<p>Now that we have a harness (the currently failing test) in place, we can change the implementation of the function safely. Note that this is NOT refactoring. We are changing <em>code</em> safely because it is under test, but we are also changing <em>behavior</em>. We are moving the test from red to green, not refactoring.</p>
+
+<p>Instead of pulling a random value and suit, let's return both at once from <em>one</em> array of values. We could manually build this array as having 52 elements, but since we already have our two arrays ready to go, let's use those. First, we'll test to make sure we get a full deck.</p>
+
+<aside data-type="sidebar" id="that-slow-test-oAHECRFY">
+<h5>That slow test</h5>
+
+<p>We want to keep it, and we want to run it, but if you put it on 100,000 iterations for fun, now is a good time to comment it out. And here we have a good case for where you would want a "slow test suite" in addition to your fast one.</p>
+
+<p>As we talked about in the previous chapter, splitting up fast and slow tests is a nice thing to plan for, but every case is different. Here, we can just comment it out. If we had our suites split by files, we could run the one test file frequently and the other as often as necessary. Other times, you might want to isolate one particular test case. With mocha's answer to you can use <strong><code>mocha -g <em>pattern</em> <em>your_test_file</em></code></strong> to run test cases where the string descriptions match the <em><strong><code>pattern</code></strong></em>. See other mocha options by running <strong><code>mocha -h</code></strong> on the command line.</p>
+</aside>
+
+<pre data-type="programlisting">
+describe('buildCardArray()', function() {
+&nbsp; it('returns a full deck', function() {
+&nbsp;&nbsp;&nbsp; wish(buildCardArray().length === 52);
+&nbsp; });
+});
+</pre>
+
+<p>This produces an error because we haven't defined <code>buildCardArray</code>.</p>
+
+<pre data-type="programlisting">
+var buildCardArray = function(){ };</pre>
+
+<p>This produces an error because <code>buildCardArray</code> doesn't return anything.</p>
+
+<pre data-type="programlisting">
+var buildCardArray = function(){
+&nbsp; return [];
+};
+</pre>
+
+<p>This isn't really the simplest thing to get us past our error, but anything with a <code>length</code> would have worked to get us to a new failure (instead of an error), which in our case is that the length is 0 rather than 52. Here, maybe you think the simplest solution is to build the array of possible cards manually and return that. That's fine, but typos and editor macro mishaps might cause some issues. Let's just build the array with some simple loops.</p>
+
+<pre data-type="programlisting">
+var buildCardArray = function(){
+&nbsp; var tempArray = [];
+&nbsp; for(var i=0; i &lt; values.length; i++){
+&nbsp;&nbsp;&nbsp; for(var j=0; j &lt; suits.length; j++){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; tempArray.push(values[i]+'-'+suits[j])
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+&nbsp; return tempArray;
+};
+</pre>
+
+<p>The test is passing. But we're not really testing the behavior are we? Where are we? Are we lost? How do we test if we're outside the red, green, refactor cycle? Well, what do we have? Basically, if we move in a big step like this, we create untested code. And just like before, we can use a new <em>characterization test</em> to tell us what happens when we run the function.</p>
+
+<pre data-type="programlisting">
+describe('buildCardArray()', function() {
+  it('does something?', function() {
+&nbsp;&nbsp;&nbsp; wish(buildCardArray(), true);
+&nbsp; });
+...
+});
+</pre>
+
+<p>Depending on your mocha setup, you could get the full deck of cards back as an array, or it might be truncated. There are dozens of flags and reporters for mocha, so while it might be possible to change the output to what we want, in this case, it's just as fast to manually add a <code>console.log</code> to the test case.</p>
+
+<pre data-type="programlisting">
+it('does something?', function() {
+&nbsp; console.log(buildCardArray());
+&nbsp; wish(buildCardArray(), true);
+});
+</pre>
+
+<p>Ok. So now we have the full array printed in the test runner. Depending on what output you got, you might have a bit of reformatting to do (now is a good time to learn your editor's "join lines" function if you don't already know it). In the end, we get:</p>
+
+<pre data-type="programlisting">
+[ '1-H', '1-D', '1-S', '1-C', '2-H', '2-D', '2-S', '2-C',
+&nbsp; '3-H', '3-D', '3-S', '3-C', '4-H', '4-D', '4-S', '4-C',
+&nbsp; '5-H', '5-D', '5-S', '5-C', '6-H', '6-D', '6-S', '6-C',
+&nbsp; '7-H', '7-D', '7-S', '7-C', '8-H', '8-D', '8-S', '8-C',
+&nbsp; '9-H', '9-D', '9-S', '9-C', '10-H', '10-D', '10-S', '10-C',
+&nbsp; 'J-H', 'J-D', 'J-S', 'J-C', 'Q-H', 'Q-D', 'Q-S', 'Q-C',
+&nbsp; 'K-H', 'K-D', 'K-S', 'K-C' ]
+</pre>
+
+<p>Great. If this array was thousands of elements, we'd need another way to derive confidence, but since it's only fifty-two, by visual inspection, we can affirm that this array looks good. We are playing with a full deck. Let's change our characterization test so that it asserts against the output. Here, we actually got our confidence in the result from visual inspection. This characterization test is so that we have coverage, and to make sure we don't break anything later.</p>
+
+<pre data-type="programlisting">
+&nbsp; it('gives a card array', function() {
+&nbsp;&nbsp;&nbsp; wish(deepEqual(buildCardArray(), [ '1-H', '1-D', '1-S', '1-C',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '2-H', '2-D', '2-S', '2-C',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '3-H', '3-D', '3-S', '3-C', '4-H', '4-D', '4-S', '4-C',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '5-H', '5-D', '5-S', '5-C', '6-H', '6-D', '6-S', '6-C',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '7-H', '7-D', '7-S', '7-C', '8-H', '8-D', '8-S', '8-C',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; '9-H', '9-D', '9-S', '9-C', '10-H', '10-D', '10-S', '10-C',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'J-H', 'J-D', 'J-S', 'J-C', 'Q-H', 'Q-D', 'Q-S', 'Q-C',
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 'K-H', 'K-D', 'K-S', 'K-C' ]));
+&nbsp; });
+</pre>
+
+<p>Passing. Good. Ok, so now we have a function that returns a full deck of cards so that our <code>randomHand</code> function can stop returning duplicates. If we uncomment our slow and occasionally failing, "should not have the first two cards be the same" test, we'll see that it's still failing. That makes sense, as we haven't actually changed anything about the <code>randomHand</code> function yet. Let's have it return a random element from our array.</p>
+
+<pre data-type="programlisting">
+var randomHand = function(){
+&nbsp; var cards = [];
+&nbsp; var deckSize = 52;
+&nbsp; cards.push(buildCardArray()[Math.floor(Math.random() * deckSize)]);
+&nbsp; cards.push(buildCardArray()[Math.floor(Math.random() * deckSize)]);
+&nbsp; cards.push(buildCardArray()[Math.floor(Math.random() * deckSize)]);
+&nbsp; cards.push(buildCardArray()[Math.floor(Math.random() * deckSize)]);
+&nbsp; cards.push(buildCardArray()[Math.floor(Math.random() * deckSize)]);
+&nbsp; return cards;
+};
+</pre>
+
+<p>We should still see our failure for the random/slow test (given enough iterations), and this is a great moment. What if we didn't have that test in place? Perhaps even without the test, it's obvious in this instance that we didn't fix the problem, but this isn't always the case. Without a test like this one, we could very well think that we fixed the problem, only to see the same bug come up again later. By the way, are we changing the <em>behavior</em>? Not really, since we're still returning five cards as strings, so we would say that we changed the <em>implementation</em>. As evidence to that, we have the same passing and failing tests.</p>
+
+<p>So how do we fix it?</p>
+
+<pre data-type="programlisting">
+var randomHand = function(){
+&nbsp; var cards = [];
+&nbsp; var cardArray = buildCardArray();
+&nbsp; cards.push(cardArray.splice(Math.floor(
+    Math.random()*cardArray.length), 1)[0]);
+&nbsp; cards.push(cardArray.splice(Math.floor(
+    Math.random()*cardArray.length), 1)[0]);
+&nbsp; cards.push(cardArray.splice(Math.floor(
+    Math.random()*cardArray.length), 1)[0]);
+&nbsp; cards.push(cardArray.splice(Math.floor(
+    Math.random()*cardArray.length), 1)[0]);
+&nbsp; cards.push(cardArray.splice(Math.floor(
+    Math.random()*cardArray.length), 1)[0]);
+&nbsp; return cards;
+};
+</pre>
+
+<p>Instead of just returning a card at a random index, we're only using the function once to build the array. Then, we use the <code>splice</code> function to, starting at a random index, return 1 element (the <code>1</code> is the second parameter of the <code>slice</code> function) and push it onto the array. For better or worse, <code>splice</code> <em>returns</em> an element, but also has the <em>side effect</em> of removing it from the array. Perfect for our situation here, but the terms "destructive" and "impure" both apply to this function (see Chapter 11 for more details). Note that we need the <code>[0]</code> because <code>splice</code> returns an array. Although it only has one element in it, it's still an array, so we just need to grab the first element.</p>
+
+<p>Back to a recurring question: Are we refactoring yet? Nope. We've changed the behavior (moving from the "red" to the "green" part of the cycle). As testament to that, our test appears to be passing now, even with many iterations.</p>
+
+<aside data-type="sidebar" id="how-many-iterations-does-it-take-to-trigger-the-failure-7yHmFoFy">
+<h5>How many iterations does it take to trigger the failure?</h5>
+
+<p>If you're good at math, feel free to ignore this, but if you're curious and feel like you might be in this situation again, knowing this math could be handy. We're testing that the first two cards are the same. What are the odds of that happening? How many iterations of the test should we use?</p>
+
+<p>We actually need to invert the test, and calculate the odds of the cards <em>not being identical</em> first. It's a 51/52 or about 98.077% chance. So with 1 iteration, our odds are 100% - 98.077%, or about 1.923%. Not very good chance of hitting it.</p>
+
+<p>With 100 iterations, we have 98.077 times itself 100 times ((98.077)^100). That gives us 14.344%. 100% minus 14.344% is 85.666%. So 100 iterations is enough to make our failure likely (&gt;85% of the time), but a little less than 1 out of every 7 times, our test will not fail.</p>
+
+<p>Back to confidence, ten-thousand iterations give us a 3.688*10^-7 chance of an errant passing test. Is that close enough to zero for "confidence"?</p>
+</aside>
+
+<p>So are we confident that our change worked? The trouble is, we're still testing something random, which means we're stuck with an inconsistent and possibly slow test.</p>
+
+<p>If you search for "testing randomness" online, many of the solutions will suggest things that make the random function more predictable. In our case though, it's the implementation itself that we should still be skeptical about. How can we get rid of the slow scaffolding test and still have confidence that our code works? We need to test the implementation of a function that doesn't depend on randomness. Here's one way:</p>
+
+<pre data-type="programlisting">
+describe('spliceCard()', function() {
+&nbsp; it('returns two things', function() {
+&nbsp;&nbsp;&nbsp; wish(spliceCard(buildCardArray()).length === 2);
+&nbsp; });
+&nbsp; it('returns the selected card', function() {
+&nbsp;&nbsp;&nbsp; wish(spliceCard(buildCardArray())[0].match(/\w{1,2}-[HDSC]/));
+&nbsp; });
+&nbsp; it('returns an array with one card gone', function() {
+&nbsp;&nbsp;&nbsp; wish(spliceCard(buildCardArray())[1].length ===
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; buildCardArray().length - 1);
+&nbsp; });
+});
+</pre>
+
+<p>In this approach, we decide that to isolate the <code>spliceCard</code> function, we have to return its return value as well as its side-effect.</p>
+
+<pre data-type="programlisting">
+var spliceCard = function(cardArray){
+&nbsp; var takeAway = cardArray.splice(
+                 Math.floor(Math.random()*cardArray.length), 1)[0];
+&nbsp; return [takeAway, cardArray];
+};
+</pre>
+
+<p>Not bad. Our tests, including the slow test, still pass. But we still need to hook in the <code>randomHand</code> function. Here's what a first attempt could look like.</p>
+
+<pre data-type="programlisting">
+var randomHand = function(){
+&nbsp; var cards = [];
+&nbsp; var cardArray = buildCardArray();
+&nbsp; var result = spliceCard(cardArray);
+&nbsp; cards[0] = result[0];
+&nbsp; cardarray = result[1];
+&nbsp; result = spliceCard(cardArray);
+&nbsp; cards[1] = result[0];
+&nbsp; cardarray = result[1];
+&nbsp; result = spliceCard(cardArray);
+&nbsp; cards[2] = result[0];
+&nbsp; cardarray = result[1];
+&nbsp; result = spliceCard(cardArray);
+&nbsp; cards[3] = result[0];
+&nbsp; cardarray = result[1];
+&nbsp; result = spliceCard(cardArray);
+&nbsp; cards[4] = result[0];
+&nbsp; cardarray = result[1];
+&nbsp; return cards;
+};
+</pre>
+
+<p>Are we refactoring yet? Yes. We extracted a function without changing the behavior (our tests behave the same). Our scaffolding test will not fail no matter how many times we run it.</p>
+
+<p>We have three considerations left. First, is this inner function that we've tested useful by itself, or only in this context? If it's useful outside of the context of dealing a hand of five (say, for blackjack?), leaving it in the same scope as <code>dealHand</code> makes sense. If it's only useful for the poker game, we might want to attempt to make it "private" (to the extent this is possible in JavaScript; see Context Part 2: Privacy in Chapter 5), which leads to a potentially unexpected conundrum: should you test private functions?</p>
+
+<p>Many say "no" because behavior should be tested by the outer function, and "testing an implementation" rather than "an interface" is a path that leads to brittle and unnecessary tests. However, if you take this advice too far, what happens? Do you still need unit tests at all? Maybe you just need extremely high-level tests aligned with corporate objectives? (How much money or did people spend playing poker in our application? How many new people signed up today?) Maybe a survey that asks people if they had fun using the application?</p>
+
+<p>For this code, adhering strictly to the idea of "testing an interface, not an implementation" does not give us the confidence we need. Can we be confident in this code as a whole if we do not test the inner function? Not really, unless we leave our scaffold in place. Our second concern, getting rid of this slow test while retaining confidence, should be solved by our new test.</p>
+
+<p>Third, are we done? As we covered in the TDD section, the "red, green, refactor" cycle is an appropriate process for improving code quality. We got to green, and we even refactored by extracting a method. Although this refactoring had a dual purpose in increasing confidence to delete a slow test, we used all three of those steps.</p>
+
+<p>One last bit of cleanup we can do is remove the dead code. Specifically, in addition to getting rid of the slow test, or isolating it in another file, we can remove the functions that are no longer called: <code>randomSuit</code>, <code>randomValue</code>, and <code>randomCard</code>, as well as their tests. See more about identifying dead code in Chapter 6.</p>
+
+<p>But if we do that, are we done? It depends. Another iteration of the "red, green, refactor" cycle is appropriate if we can think of more features to implement (tests that would fail). We're happy with how our code works, so another iteration of the cycle doesn't make sense. We're also happy with our test coverage, so we needn't go through the process for "Untested Code" as was covered earlier.</p>
+
+<p>So we're done? In many contexts, yes. But because this book is about refactoring, it's worth proposing an augmentation to the "red, green, refactor" cycle. See the diagram earlier in this chapter (figure 4.1) for a flow chart of the interaction between testing and refactoring. You can also find this flow chart at the beginning of Chapter 5.</p>
+
+<p>We've already refactored once by removing the dead code, but let's refactor our <code>randomHand</code> function one more time, taking advantage of destructuring. It sounds intimidating, but we're just setting multiple values at once.</p>
+
+<pre data-type="programlisting">
+var randomHand = function(){
+&nbsp; var cards = [];
+&nbsp; var cardArray = buildCardArray();
+&nbsp; [cards[0], cardArray] = spliceCard(cardArray);
+&nbsp; [cards[1], cardArray] = spliceCard(cardArray);
+&nbsp; [cards[2], cardArray] = spliceCard(cardArray);
+&nbsp; [cards[3], cardArray] = spliceCard(cardArray);
+&nbsp; [cards[4], cardArray] = spliceCard(cardArray);
+&nbsp; return cards;
+};
+</pre>
+
+<p>And the tests still pass.</p>
+</section>
+
+<section data-type="sect1" id="wrapping-up-g5soi7">
+<h1>Wrapping Up</h1>
+
+<p>As you're refactoring, you might be tempted to change the interface of a function (not just the implementation). If you find yourself at that point, you are writing new code that requires new tests. Refactoring shouldn't require new tests for code that is already covered and passing, although there are cases where more tests can increase confidence.</p>
+
+<p>To recap, use the red, green, refactor cycle for regressions. Write tests for confidence. Write characterization tests for untested code. Write regression tests for bugs. You can refactor as much as is practical, but only if you have enough coverage to be reasonably confident in the changes. In any case, keep the steps between your <strong><code>git commit</code></strong> commands small, so that you're ready to roll back to a clean version easily.</p>
+</section>
+</section>
+
+  </body>
+</html>

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <section data-type="chapter" id="testing-qGxs7">
+<h1>Testing</h1>
+
+<p>Let's start with what's wrong with testing.</p>
+
+<p>"Writing tests takes too long. We're moving too fast for that."</p>
+
+<p>"It's extra code to maintain."</p>
+
+<p>"That's what QA is for."</p>
+
+<p>"It doesn't catch enough errors."</p>
+
+<p>"It doesn't catch the important errors."</p>
+
+<p>"This is just a little script/simple change. It doesn't need a test."</p>
+
+<p>"But the code works."</p>
+
+<p>"Boss/Client is paying for features, not tests."</p>
+
+<aside data-type="sidebar" id="no-one-else-on-the-team-cares-and-will-break-the-test-suite-and-ill-be-trying-to-be-commissioner-gordon-in-a-gotham-gone-mad-dwCBuO">
+<h5>"No one else on the team cares and will break the test suite and I'll be trying to be Commissioner Gordon in a Gotham gone mad."</h5>
+
+<p>This one is actually a lot harder. Here, testing isn't the problem. This dynamic suggests a small and/or inexperienced team with a lack of leadership. Changes to this outlook on testing and quality could evolve over time (slowly, as in one person at a time), or by mandate from above (unlikely without new leadership).</p>
+
+<p>Unfortunately, if you're in a team full of "cowboys" (coders who just push code, ignoring quality and testing) with no interest in quality, the most likely outcome is frustration and unpredictable breakages (and unpredictable hours).</p>
+
+<p>"Leave this toxic team immediately" is not the only solution as there may be other benefits and constraints in your situation. But projects that have some focus on quality offer more stability (less turnover), better compensation, and more learning opportunities.</p>
+
+<p>Of all the possible strawman quotes listed, this one stands out as one where the fix is not simply to "recognize and enjoy the benefits of testing after becoming comfortable with it." But if the <em>engineering culture</em> actively discourages testing, it is actively discouraging quality. It's harder to change culture than your own personal outlook and experience with testing. If you're not in a leadership role, your personal development is best served by avoiding or leaving these projects.</p>
+
+<p>At first glance, "Boss/Client is paying for features, not tests." may also look like a cultural problem. However, it's unlikely that this is actually enforced at a code level. If you're efficient at writing tests, only the shortest professional engagements would move faster without having a test suite in place. In these cases, it's best to use your judgement to write quality software. No reasonable boss or client would refuse <em>any</em> verification that software works correctly. If you can automate the process efficiently, your professional standard of quality should include writing tests. If you can't do that efficiently due to your lack of skill with testing tools, you can't help but give in to lower standards until you can gain experience. First, recognize that when you do manual checks, you are testing, you're just not automating your tests. That should be sufficient motivation.</p>
+
+<p>All this is to say that the solution to internal (from you) resistance to testing is to get more comfortable with testing as you develop your standard of quality. External resistance, if strong enough, is resistance to quality and professional development. This book should help you overcome the internal resistance. The external resistance is all about networking and experience in choosing projects.</p>
+</aside>
+
+<p>If you have these opinions, you're certainly not alone, and on a given project you might even be right. There are real difficulties with writing tests. One thing to keep in mind though, is that when things are frustrating, beneficial as they might be, some coders may feel a sense of "cognitive dissonance," which can escalate a need to gather more evidence why testing is useless/costly/not your job. Here, you're acting as Aesop's fox who, after grasping for grapes and failing, consoles itself by saying that they must have been sour anyways. If software quality through testing is hard, then it must not be important, right?</p>
+
+<p>That might be a helpful adaptation for dealing with regrets and disappointments in life that are outside of your control, but without recognizing the benefits of testing, you're closed off to a completely different way of writing code. The grapes aren't sour, and unlike the fox, you can find a ladder to reach them.</p>
+
+<p>The main purpose of testing is to have <em>confidence</em> in your code. This confidence cannot be born in a vacuum. It's forged in the skepticism developed from seeing code that errs and resists change. As we'll see in the "Regression Testing for Bugs" section of the next chapter, confidence is the best indicator of what and how to test. The biggest reason to learn testing is to develop your senses of confidence and skepticism when looking at a code base. If that sounds a bit abstract, don't worry. More concrete reasons for testing are coming up in the next section.</p>
+
+<p>First, a quick note on some terms we'll be using:</p>
+
+<ul>
+	<li>"coverage" (also "code coverage" or "test coverage") – This is a measurement, most usefully as a percentage of lines of code, that are covered by tests.</li>
+	<li>"high-level" and "low-level" – Just like ordinary code, tests can be more broad (high-level) or involved in details (low-level). These are general terms, but for the two most important types of tests we'll cover, "high-level" will generally correspond with "end-to-end tests," whereas "low-level" will correspond with "unit tests"&nbsp;</li>
+	<li>"complexity" – This is a measurement of the pathways through the code, and it tends to be more casually and generally referred to as "complexity," rather than its ancestor "cyclomatic complexity."</li>
+	<li>"confidence" – This is, ultimately, why we test. Full test coverage gives us confidence that the whole codebase behaves as we intended. There are some caveats to this covered by the non-functional and TDD sections.</li>
+	<li>"exercised" – A line of code is said to be "exercised" if it is run by the test suite. If a line is <em>exercised</em>, then it has <em>coverage</em>.</li>
+	<li>"technical debt" – The situation where a lack of confidence and trust (via complexity and a lack of test coverage) in the code base results in more guesswork and slower development overall.</li>
+	<li>"feedback loop" – How long the gap is between writing code and knowing if it is correct. A "tight" or "small" feedback loop (vs. a "loose" or "long" one) is good, because you know right away when your code is functioning as expected.</li>
+	<li>"mocking" and "stubbing" – These are both ways of avoiding directly exercising a function, by swapping it out with a dummy version. The difference between the two is that mocking creates an assertion (pass/fail part of a test) whereas stubbing does not.</li>
+</ul>
+
+<section data-type="sect1" id="the-many-whys-of-testing-Njsycy">
+<h1>The Many Whys of Testing</h1>
+<strong>1. You're already doing it!</strong>
+
+<p>Well, this is a bit of an assumption, but if you run your code in the console or open up an HTML file in the browser to verify behavior, you are testing already, albeit in a slow and error-prone way. Automated testing is just making that process repeatable. See the "Manual Testing" section for an example.</p>
+<strong> 2. Refactoring is impossible without it</strong>
+
+<p>Refactoring, as discussed in Chapter 1, is completely impossible without guaranteeing behavior, which, in turn, is impossible without testing. We want to refactor and "improve code quality," right?</p>
+<strong> 3. Working with a team is easier</strong>
+
+<p>If your coworker writes some broken code, the test suite should let you both know that there's a potential problem.</p>
+<strong> 4. Demonstrating (not documenting) functionality</strong>
+
+<p>Making and maintaining documentation is a whole different discussion. But assuming you don't have docs in place, tests can demonstrate the behavior you want out of your code. Exclusively relying on tests to document the code (especially for an externally facing interface) is not a great idea, but is a step up from only having the source code as a reference.</p>
+<strong> 5. You're not just verifying the behavior of <em>your</em> code</strong>
+
+<p>Not every software library you use will have the same policy on updates and versioning. You could unintentionally upgrade to a bad or conflicting version and without testing, you wouldn't realize your code is broken. Not only that, but when you bring a new library in or use a new part of it, do you want to exclusively rely on the tests the library has in place for itself? What if you modify that library? Can you still trust just their tests then?</p>
+<strong> 6. Big upgrades</strong>
+
+<p>You really want to start using using the latest version of big framework/new runtime. How can you upgrade responsibly and quickly? Just quickly? YOLO. Deploy it. It's probably ok, right? Right? Probably not. Just responsibly? Manually go through every possible code path and verify that everything does what it is supposed to, constructing necessary data objects as you need them. For both speed and responsibility at the same time, you need a test suite. There is no other way.</p>
+<strong> 7. To catch bugs early</strong>
+
+<p>The earlier that bugs are caught in the development cycle, the easier they are to fix. Before you write them is ideal. If the quality assurance ("QA") or the product department find it, that means more people already committed and/or will commit more time to the fix. Once it hits customers, you're talking about another production cycle as well as potential loss of business or trust.</p>
+<strong> 8. To smooth out development cycles and not "crunch"</strong>
+
+<p>Testing, refactoring, improving quality, and ultimately carrying a low amount of "technical debt," will help to prevent times when you need to "move fast and can't help but break things." That means long hours, delayed releases and time away from whatever you enjoy outside of work.</p>
+
+<p><strong>9. To have a tighter feedback loop</strong></p>
+
+<p>When you develop without tests, you're increasing the amount of time between development and verifying that your code is working. With tests in place, your feedback loop can be reduced to a few seconds. Without them, you're stuck with either assuming the code works or manually testing. If that takes five minutes every time (and gets longer as complexity of the program grows), how often will you do it? Odds are the tighter your feedback loop, the more often you'll verify that your code works, and the more confident you can be in making further changes.</p>
+</section>
+
+<section data-type="sect1" id="the-many-ways-of-testing-eesbtQ">
+<h1>The Many Ways of Testing</h1>
+
+<p>In this section, we'll look at methods of testing. On each, one important thing to note is the testing methods we are looking at have three stages, the setup, the assertion, and the "tear down."</p>
+
+<p>The taxonomy of tests varies by organization, industry, language, framework, and point in history. The categories here highlight the broader types that are interesting to us in refactoring, but are not exhaustive. For instance, there are many variations of "manual testing," and what we are calling "end-to-end" tests could be called "integration tests," "system tests," "functional tests," etc. depending on the context.</p>
+
+<p>We are mostly interested in tests that aid us in refactoring. That is to say, tests that protect and help to improve quality of the software itself, rather than the experience using it.</p>
+
+<p>We consider a codebase to have full coverage when every code path is exercised by either unit tests, end-to-end tests, or ideally, both. It might seem overly picky to insist that <em>every</em> line is covered, but generally the worse the code is, the worse the coverage is, and visa-versa. Practically speaking, 100% coverage is very hard to accomplish for many reasons, especially when writing JavaScript and relying on external libraries. There are diminishing returns in confidence gained through more coverage as you approach 100% or even "five nines" (99.999%).</p>
+
+<p>Testing is a tool to produce confidence. It is not the only tool. The original author of a code base or problem domain expert can derive confidence from other sources. Tests (along with code simplicity and where appropriate, comments) are special sources of confidence because they allow the confidence to be transmitted along with the code. In any cases, they are not the goal. Confidence is the goal. Tests are a practical way of creating specific types of confidence in the code that can be transferred to other team members or future you.&nbsp;</p>
+
+<p>In any case, for the sake of refactoring, end-to-end tests and unit tests are the most important of the types we'll cover in this chapter.</p>
+
+<section data-type="sect2" id="manual-testing-74sgS4tg">
+<h2>Manual Testing</h2>
+
+<p>This was hinted at earlier in the chapter, but instinctively, everyone wants to test their code. If you're working on a web app, that likely means just loading the page with the appropriate data objects in place and clicking around a bit. Maybe you throw a <code>console.log()</code> statement in somewhere to ensure variables have expected values. Whether you call it "monkey testing" or "manual testing," "making sure it works," or "QA'ing" this testing strategy is useful for exploration and debugging.</p>
+
+<p>If you're faced with an undertested code-base, it's a good way to experiment. This applies to the feature and debugging level of development as well. Sometimes, you just need to see what is happening. This is also a large component in "spiking," the process of research that is sometimes needed before a "red/green/refactor" cycle can be entered.</p>
+
+<p>Depending on <em>which JavaScript you're using</em> (see Chapter 2), build/compiler errors can also be caught during this step.</p>
+</section>
+
+<section data-type="sect2" id="documented-manual-testing-VOsWf8ta">
+<h2>Documented Manual Testing</h2>
+
+<p>One step towards automation from manual testing is to develop a testing/QA plan. The best manual tests are either temporary or well documented. Although you want to move on to feature tests and unit tests as quickly as possible, sometimes, the fastest way to get a section of code "covered" is by writing a detailed set of steps to execute the relevant code paths. Although not automated, having a list (similar to what a QA team would have) can ensure that you are exercising the code in all the ways you need to, and makes the process less error prone by not relying on your memory. Also, it gives other members of your team a chance to contribute to and execute the plan as a "checklist." This is handy to take some of the weight from a QA team or fulfill that role if none exists.</p>
+
+<p>If you find yourself lacking confidence in the code, with a big deploy looming and a dysfunctional or incomplete test suite, this is your best option. Documenting your code paths in text allows manual steps to be repeatable and distributed among team members.</p>
+
+<p>Even if coverage is good, a QA department or developers filling that role may elect to manually run checks on a particular system if it is especially vital that it does not break (sometimes called a "smoke test") or contains complexity that is resistant to automated testing.</p>
+</section>
+
+<section data-type="sect2" id="approval-tests-WQsRhVtk">
+<h2>Approval Tests</h2>
+
+<p>This method is a bit tricky, but may work for some projects and team configurations. In this form, you automate the test set up and teardown, but the assertion (or "approval") is left to human input.</p>
+
+<p>Sometimes, the outcome of code execution would be difficult to automatically assert. For instance, let's say that you have an image processing feature on a website for automatically cropping and resizing an avatar. Setup is no problem. You simply feed it an image that you have on hand, but when it comes to asserting that image created by the cropping tool worked well, it could be difficult to write a simple assertion to do so. Do you hardcode the bytes or pixels of the images for the desired input and output? That would make the tests very <em>brittle</em> as they would break with every new image it crops. Do you skip testing altogether?</p>
+
+<p>Instead of a simple "failure," this test suite has a memory for what was alright the last time around. When the test runs a second time, the same output will "pass," and the other tests (that are new or have different results than the approved output) are added to the "unapproved" queue for human observation. When a member of the queue is approved, the new version of the output replaces or augments the memory of the old output (these can be files/db entries on the development machine or a staging server). If everything is approved, then the code is assumed to be functioning correctly. If everything is not approved, the code gets the same treatment as it would for any failing test: It gets fixed, and hopefully with a few <em>regression tests</em> that reproduce the specific conditions that caused the bug.&nbsp;</p>
+
+<p>This process may work well when the output is something like an image, video or audio file, and thus difficult to write an assertion based on programmatically inspecting it. HTML may seem like a good fit for this type of testing, but often, end-to-end tests or unit tests are more appropriate if assertions are things like testing for text or an element on a page. Because you can use an HTML parser, or even a regex parser (most of the time) for HTML/CSS, those are better tested through unit tests or end-to-end tests.</p>
+
+<p>Just as manual tests are an organic individual process for testing as an individual, in some ways, approval tests are a natural way to test in a group. In any situation where a QA department, product owner, or designer is in a position to approve the output of something, an ad hoc approval test system is in place. Depending on the technical ability of the approver, they may be responsible for the setup programmatically, through a documented manual test, or asking the developer for a demo.</p>
+
+<p>The weaknesses of the ad-hoc approval test system is that setup may be onerous for the approver, and such system has a dubious capability to remember what outputs were approved/rejected. This is not an insult the memory of anyone involved. Even if they are singularly focused on this process, if the team using this process changes, all of the knowledge of the old approvals changes as well.</p>
+
+<p>But recognize that any attempt to framework-itize process will produce something that looks different to an approver than what they might be used to. Keeping things simple for them probably means a list of urls to be reviewed in the queue.</p>
+
+<p>For the developer, there are non-trivial annoyances in setting the queue up, setting each test up, and providing some easy way for the approver to review.</p>
+
+<p>Even though this process is popularly practiced in an ad hoc way by teams, there has been little innovation in the seemingly likely space of "approval test frameworks." The questions raised by a system like this suggest some reasons why:</p>
+
+<ul>
+	<li>If development and approval are two distinct processes, where does the canonical list of approved/unapproved tests/checklists live?</li>
+	<li>Who is tasked with the "extra work" of translating product or design requirements into these lists?</li>
+	<li>Should the list of features be contained within the source code?</li>
+	<li>Should approval test failures (after a manual check) be integrated tightly enough to fail a test build?</li>
+	<li>If so, how can you avoid this slowing down testing cycles?</li>
+	<li>If not, what is the feedback mechanism when someone rejects an approval spec?</li>
+	<li>Will there be a mismatch of expectations if developers see approval tests passing as the completion of a task?</li>
+	<li>What interaction, if any, should an approval test framework have with an issue/feature/bug tracking system?</li>
+</ul>
+
+<p>It can be difficult enough for a process to be adopted when it is confined to a development team, but in the case of an approval test framework, everyone involved has to understand and agree to the answers to the above questions. Perhaps some Software as a Service product would be able to manage these concerns, but the preferred interfaces across different teams are varied and productized decisions about what types of processes to change with a tool like this are unlikely to make everyone happy.</p>
+
+<aside data-type="sidebar" id="related-acceptance-testing-2GCgFPhPtA">
+<h5>Related: Acceptance Testing</h5>
+
+<p>There have been attempts to formalize "acceptance testing," which rigorously mandates creation of specifications that correspond with user stories. If you are interested in this type of testing, "CucumberJS" would be a framework to investigate.</p>
+
+<p>Although it seems appealing, and it specifies a lot of uncertainty about approval tests, getting an internal cross-functional team or client on board may be more challenging than expected.</p>
+
+<p>In the worst (but fairly likely) case, developers end up writing another entire layer of testing (rather than the client or "product-owner"), but the client/product-owner still requires the same level of flexibility in process that the tests are intended to guard against.</p>
+
+<p>Confusingly, some frameworks that are described as "acceptance test" frameworks do not insist on "English-like" syntax and do not imply a complex process that starts with a non-developer writing the spec in said "English-like" syntax. Instead, they provide high-level APIs for events like "clicking" and "logging in," but these are clearly code, and not obscured by a layer of language that is converted into code.</p>
+
+<p>These high-level APIs are useful for end-to-end tests, but be wary of frameworks that try to automate the actual acceptance of tasks. Requirements <em>magically</em> turning into code, and code <em>magically</em> fulfilling requirements tends to actually be the <em>magic</em> that is software engineering, which isn't really magic and probably involves humans talking to each other. Ta-da.</p>
+</aside>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect2" id="end-to-end-tests-wNsVudtl">
+<h2>End-to-End Tests</h2>
+
+<p>Finally, the good stuff. These tests are meant to automate the actual interactions that a manual tester could perform with the interface provided to the end user. In the case of the web app, this means signing up, clicking on a button, viewing a webpage, downloading a file, etc.</p>
+
+<p>For tests like these, code should be exercised in collaboration with other pieces of the code base. "Mocking" and "stubbing" should be avoided except when absolutely necessary (usually involving the file system or remote web requests) so that these tests can cover the integration between different system components.</p>
+
+<p>These tests are slow and simulate end-users' experience. If you want to split test suites into two, one fast and one slow, an end-to-end suite and unit test (covered next) suite are what you want. These are also called "high-level" and "low-level" tests. If you're not familiar with those terms, "high-level" means to take a broader view and have your code be more concerned with an integration of parts vs. "low-level" which means more focused on the details.</p>
+</section>
+
+<section data-type="sect2" id="unit-tests-pWsNsztP">
+<h2>Unit Tests</h2>
+
+<p>Unit tests are fast and singularly focused on "units." What is a <em>unit</em>? In some languages, the answer would be "<em>mostly</em> classes and their functions." In JavaScript, we could mean files, modules, classes, functions, object, or packages. Whatever method of abstraction forms a <em>unit</em> though, the focus of unit tests is on the behavior of the inputs and outputs of functions for each unit.</p>
+
+<p>If we pretended that JavaScript's ecosystem was simpler and just contained classes, this would mean testing the inputs and outputs inside of that class, along with creation of objects from the class.</p>
+
+<aside data-type="sidebar" id="about-private-functions-KWCdt1sktQ">
+<h5>About "private functions"</h5>
+
+<p>It's a bit of a simplification to say that JavaScript "units," whatever those may be (classes? function scope? modules?), are split into "private" and "public" methods. In packages/modules, private methods would be the functions that are not exported. In classes and objects, you have explicit control over what is "private" in a sense, but doing so necessarily involves extra setup and/or awkward testing scenarios.</p>
+
+<p>In any case, a popular recommendation is to only test "public" methods. This allows your public methods to focus on the interface of inputs and outputs, as the code for private methods will still be exercised by running the public methods that make use of them. This leaves private methods with a bit of flexibility to change their "implementation details," without having to rewrite the tests (tests that break when an interface hasn't changed can be called "brittle").</p>
+
+<p>This is a good guideline in general, with tests also following the mantra "code to an interface, not an implementation," but doesn't always line up with a priority of "code confidence." If you can't be confident in a public method without testing its implementation, feel free to ignore this advice. We'll see an example of when this could happen in the next chapter when we deal with randomness.</p>
+</aside>
+
+<p>In contrast to end-to-end tests, we're only concerned with the independent behavior of functions of our units. These are low-level tests, rather than high-level tests. That means at integration points between units, we should feel free to mock and stub more liberally than with end-to-end tests. This helps to keep the focus on the details, and leave the end-to-end tests tasked with the integration points. Additionally, if you avoid loading your entire framework and every package you use, as well as fake the calls to remote services and possibly the file system and database as well, this test suite will stay fast, even as it grows.</p>
+&nbsp;
+
+<aside data-type="sidebar" id="where-frameworks-can-let-you-down-EWCyIjsJtw">
+<h5>Where frameworks can let you down</h5>
+
+<p>Frameworks often come with their own patterns of testing. These may relate to the directory that code lives in, rather than whether it is a unit test or an end-to-end test. This is unfortunate for two reasons. First, it encourages <em>one</em> test suite, rather than a fast suite (run frequently) and slow suite (run somewhat often).</p>
+
+<p>Division by app directory can also encourage tests that are part unit test and part end-to-end test. If you're testing a sign up in a web app, should you need to load the database at all? For an end-to-end test, the answer is probably yes. For a unit test, the answer is probably no. Having slow tests (end-to-end) and fast tests (unit) to differentiate this behavior would be ideal.</p>
+
+<p>This division is eroded in part because colloquially, tests can be known as "feature tests," "model tests," "services tests," "functional tests," etc. if the test directory mirrors the app directory. As an application grows, this could result in one big slow test suite (with fast tests mixed in). Once you have one slow test suite, it is difficult to dig in and split it into <em>necessarily</em> slow tests and <em>probably</em> fast tests. Fortunately, your app's structure may provide hints at what folders should be fast and what folders should be slow (based on whether the files inside them tend to do high-level or low-level operations). Following that division, additional work is likely needed to remove loading dependencies of the potential fast unit tests. As they are built without performance in mind, they are likely to load too much of the app, the database, and external dependencies.</p>
+
+<p>One advantage to the default organization that a framework might provide is that tests may be easier to reason about, and write to begin with. Although at some point this approach may be undesirable, having a test suite with good coverage is better than two with slightly better architecture but worse coverage.</p>
+
+<p>All this is to say, solve the immediate problem, but look out for future problems as well. If you have bad coverage, that takes priority. If your test suite is so slow that no one will run it, a problem that you're only likely to have as a <em>result</em> of many tests and good coverage, then focus your efforts on <em>that</em> problem.</p>
+
+<p>Your test suite, just like any code, should be written to serve its primary purpose before performance tuning. Coverage and confidence come first, but if your suite gets bogged down to the point where it isn't run frequently, then the performance must be addressed. This can be done through rented test running architecture online, parallelizing tests, splitting into slow and fast suites, and mocking/stubbing calls to systems that are particularly slow.</p>
+</aside>
+</section>
+
+<section data-type="sect2" id="non-functional-testing-gMseFVtr">
+<h2>Non-functional Testing</h2>
+
+<p>In the context of refactoring, non-functional testing does not directly contribute to accomplishing our code quality goals. Nor does it contribute to "confidence" that the code works. Non-functional testing techniques include:</p>
+
+<ul>
+	<li>Performance Testing</li>
+	<li>Usability Testing</li>
+	<li>Playtesting</li>
+	<li>Security Testing</li>
+	<li>Accessibility Testing</li>
+	<li>Localization Testing</li>
+</ul>
+
+<p>Results of tests of these types contribute to new features creation and issues&nbsp;(more broadly than what might initially be considered "bugs") to fix. Is your game fun? Can people use your program? What about expert users? Is the first time experience interesting? What about people with visual impairments? Will lax security policies lead to a data breach or prevent collaborations with partner companies or clients?</p>
+
+<p>Unit and end-to-end testing will lead to coverage, confidence, and the chance to refactor, but it will not address these questions directly.</p>
+
+<div data-type="note" id="try-audio-captcha-sometime-NGhAIzFBt1"><h6>Note</h6>
+<h1>Try audio captcha sometime</h1>
+
+<p>Some audio captchas on websites are horribly difficult. But it's worse than that. The experience often starts with being presented with an image of someone in a wheelchair, which certainly doesn't apply to all people who are visually impaired. And the audio that follows is often disturbing and haunting as well as being difficult to parse. All in all, a terribly unwelcoming and frustrating process.</p>
+
+<p>In a conference talk by accessibility expert Robert Christopherson, he conducted an experiment with attendees using an audio captcha. He played it twice, and had everyone write down what they thought they heard, then comparing it to the person next to them. Finally, he asked how many people matched their neighbor. Zero people out of about a thousand.</p>
+
+<p>Ignoring non-functional testing will necessarily lead to ignoring some people, which is somewhere between <em>mean</em> and <em>illegal</em>. Non-functional testing is very important, but just not the focus of this book.</p>
+</div>
+
+<p>Non-functional testing, whether for accessibility or otherwise, is critical to the heart of a project. Because this book is focused strictly on technical quality, we can't help but gloss over the many disciplines involved in non-functional testing, but we also can't leave the topic without a recommendation to spend more time learning about these ideas. Not only that, but also consider that a diverse team, functionally, demographically, and in life experiences, can help to route out the most egregious problems quickly, and make the nuances more clear.</p>
+
+<p>All this said, these testing techniques will tend to generate tasks (bugs/features/enhancements) that will need attention in addition to what the obvious product road map indicates. This means more code changes and potentially more complexity. You want to meet that complexity with confidence, just as you would with main line product features. The confidence to be flexible, fix bugs, and add features comes from testing.</p>
+</section>
+
+<section data-type="sect2" id="other-test-types-of-interest-QlsLixt7">
+<h2>Other Test Types of Interest</h2>
+
+<p>We'll cover these in detail in the next chapter, but this classification concerns different ways that your tests may interact with the implementation code. All of these three types may be either high-level or low-level.</p>
+
+<ul>
+	<li>Feature Tests – These are the tests that you write for new features. It is helpful to write the tests first (use TDD), as will be demonstrated in the next chapter.</li>
+	<li>Regression Tests – These tests are intended initially to reproduce a bug, followed by changes to the implementation code in order to fix the bug. This guarantees coverage so that the bug does not pop up again.</li>
+	<li>Characterization Tests – You write these for untested code to add coverage. The process begins with observing the code through the test, and ends with unit or end-to-end tests that are work just as if you had written a feature test. If you want to follow TDD ("Test-Driven Development"), but the implementation code is already written (even if <em>you</em> just did it), you should consider either writing this type or temporarily rolling the implementation code back (or commenting it out) in order to write the test first. This is how you can ensure good coverage.</li>
+</ul>
+</section>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="tools-and-processesandnbsp-LJsQUN">
+<h1>Tools and Processes&nbsp;</h1>
+
+<p>Hopefully at this point, we're totally on board with the "why" behind testing, and understand how unit and end-to-end tests form the core to being confident in our code.</p>
+
+<p>There is one last problem we need to address in this chapter: <em>testing is hard</em>. We already wrote the code, and now we have to do extra work to write the code that uses it in a structured and comprehensive way? That's frustrating (and also backwards if you're doing TDD, but we'll get to that in a few short pages).</p>
+
+<p>The larger problem is that <em>quality is hard</em>. Fortunately, there's more than just advice on how to do this: There are processes and tools as well as a good half-a-century's worth of research on how to encourage quality software.</p>
+
+<p>Not all of these tools and processes are great for every project and every team. You might even spot an occasional lone wolf programmer who avoids process, tools, and sometimes testing altogether. She might be deeply creative and prolific, to the point where you see her and wonder if this is how all software should be developed.</p>
+
+<p>In complex software, maintained by teams of coders of varying skill levels, responsible for real deadlines and budgets, this approach will result in technical debt and "siloed" information that is not well understood by the whole team. Quality processes and tools scale up with complexity of projects and teams, but there's really no one size fits all situation.</p>
+
+<section data-type="sect2" id="processes-for-quality-74sETdUg">
+<h2>Processes for quality</h2>
+
+<section data-type="sect3" id="coding-standards-and-style-guides-VOsxHDT4UB">
+<h3>Coding Standards and Style Guides</h3>
+
+<p>The simplest process to use in order to help with test coverage and quality is for a team to adopt certain standards. These typically live in a "style guide" and include specifics like "use <code>const</code> and <code>let</code> instead of <code>var</code>" as well as more general guidelines like: "all new code must be tested" and "all bug fixes must have a test that reproduce the bug." One document may cover all the systems and languages that a team uses, or they could be broken out into several (eg. "css style guide," "front-end style guide," "testing style guide," etc.).</p>
+
+<p>Developing this document collaboratively with team members, and revisiting it from time to time can make it flexible enough to adopt to changing ideas of what "good" means for the team. Having this document in place provides a good foundation for the other processes covered here. Also, in an ideal world, this most of this style guide is also executable, meaning that you have the ability to check for a large class of style guide violations very easily.</p>
+
+<p>The term "style guide" may also refer to a design document describing the look and feel of the site. Aspects of this may even be in an external "press kit" type form with instructions ("Use this logo when talking about us.", "Our name is spelled in ALL CAPS", etc.) These are distinct documents. Putting documents like these in the same place with "<em>coding</em> style guides" is not recommended.</p>
+</section>
+
+<section data-type="sect3" id="developer-happiness-meeting-WQsyceT4UY">
+<h3>Developer Happiness Meeting</h3>
+
+<p>Another lightweight quality-focused process worth considering is a weekly, short meeting sometimes referred to as "developer happiness"&nbsp;(this name may not be well received by non-coders in the organization), "engineering quality," or "technical debt." The purpose of the meeting is to recognize areas in the codebase that have quality problems worth addressing. If product managers tightly control the queue of upcoming tasks, then this process enables one of the developers to perpetually make the case to them for adding a given task to the queue. Alternatively, developers or product managers may allocate a weekly "budget" for these type of tasks.</p>
+
+<p>However the tasks are given priority, this process allows for things like "speeding up the test suite," "adding test coverage to the legacy module," or refactoring tasks to be addressed in a way that doesn't surprise anyone, maintains a quality focus, and allows the worst technical debt to be surfaced, widely understood, and then paid off.</p>
+</section>
+
+<section data-type="sect3" id="pair-programming-wNskt4TpUK">
+<h3>Pair Programming</h3>
+
+<p>Pairing, aka Pair Programming, is a simple idea, but implementing it in a team can be difficult. Basically, two programmers tackle a problem, side-by-side, with one person running the keyboard, aka "driving," while the other watches the screen and sometimes has an additional computer available for research and quick sanity checks without tying up the main development machine. Typically the "driver" role is passed back and forth, sometimes at regular, predetermined intervals.</p>
+
+<p>Pairing can lead to higher quality because small bugs, even just typos, can be caught right away. Additionally, questions about quality ("Is this too hacky?" or "Should we test this as well?") come up frequently. Openly discussing these details can lead to more robust code and higher test coverage. Another benefit is that information about the system is held by at least two people. Not only that, but it helps other knowledge, ranging from algorithms to keyboard shortcuts, to spread through an organization.</p>
+
+<p>Knowledge sharing, focus, high quality code, and company. What's the downside? Well, like other quality-based initiatives, it can be difficult to justify the upfront expense. "Two programming <em>resources</em> are working on one task. What a waste!" Second, this process demands total focus, and can actually be quite exhausting for the programmers. For this reason, pairing is often seen coupled with use of the "pomodoro" technique, where focus is mandated in 25 minute increments, along with 5 minute breaks in between. Third, this process can feel insulting and frustrating to programmers (especially high performers) who think their output is slowed by it. Often, this happens when there is a large gap in experience between the pairing members. Although this difference in skill potentially benefits the team most by allowing the greatest amount of knowledge transfer, not every programmer wants to act as a mentor. If it's a priority to keep pair-averse individual contributors happy and on staff, a team-wide mandate might be too aggressive of an approach.</p>
+
+<p>Experimenting with pairing and getting feedback is a good idea, but teams tend to pair either very often or very rarely. Without a mandate or at least a genuinely supportive attitude from the team and management, despite its benefits, a situation can develop where those who would pair are reluctant to for fear of being seen as ineffective on their own. Skepticism of the process by pair-averse team members or managers will feed this reluctance. Then "pairing" takes on a new meaning, where people "pair" when they're stuck. Thus a cycle forms where pairing is stigmatized. So while pairing isn't "all or nothing," it likely is "mostly or barely."</p>
+
+<aside data-type="sidebar" id="about-resources-6rC4IEtRT3Ur">
+<h5>About "resources"</h5>
+
+<p>When people (usually project/product managers) refer to design, development, or any other department as "resources," as in "we need more programming <em>resources</em> on this project," or "I need a <em>resource</em> for my project," try giving a quizzical look and saying "What? Oh... You mean <em>people</em>?"</p>
+
+<p>Two problems here. First, hopefully, your team consists of programmers with diverse skills and experiences, and thinking of them as interchangeable units is not a good start to ensuring a project is well executed. Second, defining people (especially to their face) strictly by their function is somewhere between unprofessional and mechanistically dehumanizing.</p>
+</aside>
+
+<p>Three (not mutually exclusive) variations on pairing worth noting are "TDD pairing," "remote pairing," and "promiscuous pairing." With TDD pairing, the "driving role" tends to alternate with the first person writing a test, and the second person implementing the code to make the test pass. In remote pairing, people not in the same physical location share their screens along with open audio and video channels. In "promiscuous pairing" as opposed to "dedicated pairing," the pairs of people are rotated on a day-by-day, week-by-week, sprint-by-sprint, or project-by-project basis.</p>
+</section>
+
+<section data-type="sect3" id="code-review-pWsRUAT1Ua">
+<h3>Code Review</h3>
+
+<p>Another technique that helps ensure quality by putting another set of eyes on the code is "code review." Through this process, when code is "finished," it is put into a review phase where another programmer looks through it, checking for style guide violations, bugs, and ensuring test coverage. This may also be combined with a QA pass from the developers (especially on teams without a QA department), where the reviewing programmer manually runs the code and compares it with the task description (or more formally, "acceptance criteria").</p>
+
+<p>While pair programming and code review will not directly help overcome a dislike of testing, they will provide opportunities to focus on testing and quality. Enough of these experiences should help to address, or at least provide a more nuanced perspective on testing than that reflected by the quotes used to start off this chapter. Both processes give opportunities to establish norms and reinforce culture.</p>
+</section>
+
+<section data-type="sect3" id="test-driven-development-gMsMINTMUy">
+<h3>Test-Driven Development</h3>
+
+<p>If you have the basics of testing down, Test-Driven Development (aka TDD), can produce quality code with good test coverage. The downside is that it is a significant departure from a process of testing after the implementation code is written. The upside is that TDD, through the "red, green, refactor" cycle, can provide guidance throughout development. Additionally, if TDD is followed strictly, implementation code is <em>only</em> written in order to get a passing test. This means that no code is written that does not have coverage, and therefore, no code is written that cannot be refactored.</p>
+
+<p>One challenge to a coder using TDD is that sometimes it is not obvious how to test, or even write the implementation code to begin with. Here, an exploratory phase known as "spiking" is suggested, where the implementation code is attempted before the tests are written. Strict TDD advocates will advise deleting or commenting out this "spike code" once the task is understood well enough to write tests and implement them a la the normal "red, green, refactor" cycle.</p>
+
+<p>A term that you'll often see near to TDD is BDD (Behavior Driven Development). Basically, this process is extremely similar to TDD, but is done from the perspective of the end-user. This implies two main things of importance. First, the tests tend to be high-level, end-to-end tests. Second, inside of the "red, green, refactor" cycle of BDD end-to-end tests, there are smaller "red, green, refactor" cycles for TDD'd unit tests.</p>
+
+<p>Let's take a look at a slightly complex diagram of a "red, green, refactor" cycle.</p>
+
+<figure id="id-8lSyIpInTyU8"><img alt="" class="ired_green_refactor_png" src="red_green_refactor_.png">
+<figcaption><span class="label">Figure 3-1. </span>&nbsp;</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/evanburchard-at74714439785/red_green_refactor_.png">&nbsp; red_green_refactor_.png</a></p>
+
+<p>Woah. Ok. So this might look a little crazy, but there are only a few complications here, and this should help you if you're wondering what part of the "red, green, refactor" cycle you are in.</p>
+
+<p>Starting at the top left, we write a failing test, which puts us in a red state. We have 3 possibilities from there (one failing test). We could follow the arrow to the right (top middle red state) and write another failing test (then we would have two). If possible, we could follow the long arrow down to the green state (implement the test), or the most complicated possibility exists for when we can't implement the test and make it pass right away. In that case, we follow the short arrow down where we meet another cycle just like this one. Assume we're stuck there for now, but always free to create new failing tests in any cycle that we've initiated.</p>
+
+<p>If any tests (at any level) are in the green state in the middle, you can do one of two things. Either, refactor, or call it done and consider this test and code complete (leave the cycle). When you start refactoring, you can either keep refactoring or consider this test and code complete (leave the cycle).</p>
+
+<p>When all the tests are complete, the arrows can all leave the cycle. If you're in an inner cycle, that means you move into the green phase of the outer cycle. If you're in the outer cycle, and you can't think of any more tests to write (no more reds to tack on to the top row, then you're done.</p>
+
+<p>One subtlety in this process worth noting is that creating a new red test after a green test is recommended only after you have at least considered a refactoring phase. If you move on right away, there is no clear indication that more work is to be done. By contrast, if you have just refactored something, then you're free to move on. Similarly, if you have written a failing test (red state), then if you write another test case, your test framework will still let you know that there is more work to be done on the first one, so you won't get lost there.</p>
+
+<p>Moving on from the diagram, here is a concrete example of a TDD cycle containing another TDD cycle.</p>
+
+<ul>
+	<li>(Outer Cycle) Failing ("red"), high-level test is written: "A customer can login."</li>
+	<li>(Inner Cycle) Red, low-level test is written: "Route '/login' returns 200 response."</li>
+	<li>(Inner Cycle) Routing code is written to pass the low-level test. You can refactor this code written on the inner cycle now.</li>
+	<li>(Inner Cycle) The high-level test is still failing, so a new, failing low-level test is written: "The form post route at '/login_post' should redirect to '/' for valid email and password."</li>
+	<li>(Inner Cycle) Code is written to handle successfully posting email/password and returning the logged in home page. This inner cycle test is passing, so you can refactor this code written on the inner cycle now.</li>
+	<li>(Outer Cycle) Now the second low-level test, as well as the high-level test are both passing.</li>
+	<li>Once everything in our outer cycle test is green, we're free to refactor the outer cycle as we see fit. And we have two levels of testing to ensure our code continues to behave.</li>
+</ul>
+
+<p>For the purposes of refactoring, using a methodology like BDD doesn't really matter. What matters is that you have good coverage in your code, preferably from unit tests <em>and</em> end-to-end tests. If those were created in a "test first" manner via TDD or BDD, that's fine. But the aspect of testing from the end-users' perspective through BDD is not critical. It's possible to create high-level tests with good coverage that don't test from this perspective and that aren't written before the implementation code.</p>
+
+<aside data-type="sidebar" id="quality-processes-as-team-and-personal-branding-01CkH2IMTwUa">
+<h5>Quality Processes as Team and Personal Branding</h5>
+
+<p>You will often see development methodologies and quality-enhancing techniques used as social proof. Job seekers add them to their resumes, hiring pages display them on job listings, and top consultancies build their brand around them.</p>
+
+<p>Although day-to-day, there may a focus on "getting things done," potentially to the detriment of quality, being comfortable with these techniques and tools means access to better employment opportunities, be they with companies or clients.</p>
+</aside>
+</section>
+</section>
+
+<section data-type="sect2" id="tools-for-quality-VOsNS9Ua">
+<h2>Tools for quality</h2>
+
+<p>Moving on to tools for testing, this could be a book unto itself. Though frameworks and tools rise and fall in popularity, knowing what types of tools are available will remain useful. Sometimes, GitHub or npmjs stars are a good proxy for quality and popularity. Searching "js [tooltype]" (eg. "js test coverage") with your preferred search engine usually returns decent results. It's best to learn one or two versions of each of these tools well, but with JavaScript's open source package development being as expansive as it is, be prepared to frequently adapt to new but similar tools.</p>
+
+<section data-type="sect3" id="version-control-wNsEc8SpUK">
+<h3>Version Control</h3>
+
+<p>Before any other tool is mentioned, (in case you missed it in Chapter 1) it is critical that your project is under version control, preferably with backups somewhere other than just your computer. If lack of testing should produce skepticism rather than confidence, lack of version control should produce uneasiness, if not terror. Version control, with a backup online (git + GitHub as of this writing is recommended) ensures your code doesn't completely disappear. No amount of quality in the code matters if it can just get wiped out. Additionally, many of the tools covered below rely on versioned software for integration and to demonstrate progress.</p>
+</section>
+
+<section data-type="sect3" id="test-frameworks-pWsytvS1Ua">
+<h3>Test Frameworks</h3>
+
+<p>These vary significantly based on what JavaScript you are using (see Chapter 2), and how many tools you want bundled together. In general, these allow you to specify test cases in a file (or many) and have a command line interface that you can use to run the test suite. A test framework may include many of the tools listed below as well. Some frameworks are specific to the front-end or back-end code. Some are specific to the JavaScript framework. Some are specific to high-level, low-level, or acceptance tests. They will usually dictate how your test files are written as well as provide a test runner. The test runner will execute the suite (often allowing targeting of a specific directory, file, or individual test case), and output errors and failures of the run. They are also likely responsible for the setup and teardown phases of your test run. Besides loading code, this can also mean putting the database in a particular state ("seeding" it) before the test run, and then resetting it afterwards (as your tests may have created/deleted/changed records).</p>
+
+<p>In the next chapter, we use some of the more basic features of the "Mocha" Test Framework. In Chapter 9, we'll also be trying out a lighter weight framework called "Tape."</p>
+</section>
+
+<section data-type="sect3" id="assertionexpectation-syntax-libraries-gMsWUlSMUy">
+<h3>Assertion/Expectation Syntax Libraries</h3>
+
+<p>These are usually meant to work with particular testing frameworks and often come bundled with them. They are what enable you to assert that a given function returns "hello world" or that running a function with a given set of inputs results in an error.</p>
+
+<p>Assertion libraries can be unnecessarily complicated. In Chapter 4 a simple assertion and characterization testing library is introduced called "wish."</p>
+</section>
+
+<section data-type="sect3" id="domain-specific-libraries-QlsJI9SdUb">
+<h3>Domain Specific Libraries</h3>
+
+<p>Examples of these include database adapters and web drivers (to simulate clicks and other website interactions). These may be bundled into a JavaScript framework or testing framework. Often, they come with their own assertion/expectation syntax which extends the testing framework.</p>
+</section>
+
+<section data-type="sect3" id="factories-and-fixtures-RNs7TvSVUp">
+<h3>Factories and Fixtures</h3>
+
+<p>These tools are responsible for creating db objects either on demand (factories) or from a file specifying data (fixtures). These libraries are sometimes associated with the word "fake" or "faker." You'll find these useful if your tests require a lot of code to set up.</p>
+</section>
+
+<section data-type="sect3" id="mockingstubbing-libraries-oWsnSKSPU8">
+<h3>Mocking/Stubbing Libraries</h3>
+
+<p>These are sometimes associated with the terms "mocks/mocking," "stubs/stubbing," "doubles," and "spies." Mocks and stubs both allow you to avoid calling a certain function in your tests, while mocks also set an expectation (a test) that the function is called. General mocking/stubbing functionality is usually included as part of a testing framework, but there are also more specific mocking/stubbing libraries that are not. These may stub out whole classes of function calls, including calls to the filesystem, the database, or any external web requests.</p>
+</section>
+
+<section data-type="sect3" id="buildtaskpackaging-tools-xeswfOSgUo">
+<h3>Build/Task/Packaging Tools</h3>
+
+<p>The JavaScript ecosystem has a ton of tools for gathering code together, transforming it, and running scripts (custom or library-defined). These can be dictated by a JavaScript framework, and you might have some that overlap in your project.</p>
+</section>
+
+<section data-type="sect3" id="loaders-and-watchers-Kas6hnSnUQ">
+<h3>Loaders and Watchers</h3>
+
+<p>If you're running the test suite frequently, which is essential to having a tight feedback loop, loading your whole app/program before every run of your test suite can slow you down significantly. Loaders can speed up the process by keeping your app in memory. This is often paired with a watcher program that executes your test suite when you save a file. The feedback loop can be tightened even further when the watcher script intelligently only runs the tests relevant to the saved file.</p>
+</section>
+
+<section data-type="sect3" id="test-run-parallelizers-6esQuWS4U4">
+<h3>Test Run Parallelizers</h3>
+
+<p>Sometimes built into loaders/task runners or test frameworks, these tools make use of multiple cores on your machine, parallelizing the test run and speeding up the execution of the test suite. One caution here worth noting is that if your application is heavily dependent on side-effects (including using a database), you may see more failures when tests produce state that conflicts with other tests.</p>
+</section>
+
+<section data-type="sect3" id="continuous-integration-aka-ci-EwsosDSyUw">
+<h3>Continuous Integration (aka "CI")</h3>
+
+<p>These are online services that run your test suite on demand or upon events like committing to the shared version control repository, sometimes restricted to particular branches. These often make use of parallelization (and overall performance) beyond what you could accomplish on your personal machine.</p>
+</section>
+
+<section data-type="sect3" id="coverage-reporters-aesVF8S6Uk">
+<h3>Coverage Reporters</h3>
+
+<p>In order to know if code is safe to refactor, it is essential to know that the code is sufficiently covered by tests. Whether or not coverage is able to be determined without actually running the test suite (and consequently exercising the code) is an interesting academic question of "dynamic" vs. "static" analysis, but fortunately, coverage tools that determine coverage by running the test suite are abundant. These can be run locally, but are often paired with continuous integration systems.</p>
+
+<aside data-type="sidebar" id="mutation-testing-1lC9cyFWS3UK">
+<h5>Mutation Testing</h5>
+
+<p>If you're interested in other possibilities using dynamic analysis, as coverage tools make use of, you might want to check out "mutation testing."</p>
+
+<p>This topic can run a bit deep, but basically a tool runs your test suite with a mutated code base (most easily by changing test inputs, eg. a string input where a boolean was expected) and <em>fails</em> when your tests <em>pass</em> in spite of running mutated code.</p>
+
+<p>This can allow you to find cases where tests don't actually require the code to be as it is. That may mean that the code is not exercised, but it also could mean that the normal input is meaningless in the context of the test. For example, if a parameter to a function is used in a way that is so general that various mutated inputs would work just as well, it suggests that even if coverage shows a line of code as being run, the code is not sufficiently exercised. At best, you may just be relying on type coercion in JavaScript's case.</p>
+
+<p>Two warnings here. First is that mutation testing relies on multiple variations on your normal test suite, so it will tend to be slow. Second is that it may break your code in unexpected ways and complicate the tear-down phase of your test, for example, by doing anything from leaving your test database in an unexpected state to actually changing the code in your files. Check your code into version control and back up your database before you run something this aggressive and unpredictable.</p>
+</aside>
+</section>
+
+<section data-type="sect3" id="style-checkers-aka-linters-JEsdiLSGUD">
+<h3>Style Checkers, aka "Linters"</h3>
+
+<p>Most quality tools don't require dynamic analysis. Files can be inspected without executing the code to look for many types of errors or stylistic violations. These checks are sometimes run locally as discrete scripts or through online services after code is committed to a shared repository. For a tighter feedback loop, these checks can often be integrated in a programmers IDE or editor. You can't do any better than getting notifications of mistakes immediately after you write them. Sometimes these are called "linters." At best, these style checkers you have in place serve as an executable "style guide."&nbsp;</p>
+</section>
+
+<section data-type="sect3" id="debuggersloggers-yosbCmSQUm">
+<h3>Debuggers/Loggers</h3>
+
+<p>Sometimes, during a "spike" (writing exploratory, temporary code without testing), a tricky test case, or while manually testing, it may be unclear what value variables have, what functions are outputting, or even whether a certain section of code is running. In these cases, debuggers and loggers are your friends. At the point in the file where the confusion lies, either in your test or your implementation code, you can add a logging statement or set a debugging "breakpoint." Logging will sometimes give you the answer you need (eg. "this function was reached" or "this file was loaded"), but debuggers offer the chance to stop execution of the code and inspect any variable or function call you want.</p>
+</section>
+
+<section data-type="sect3" id="stagingqa-servers-jWsrHkSOUN">
+<h3>Staging/QA Servers</h3>
+It can be difficult to simulate production to the level needed on your local development machine. For this reason, servers (or instances/VMs) that are as similar as possible to production are often used with a database that has a sanitized but representative version of production data.</section>
+</section>
+
+<p>&nbsp;</p>
+
+<p>If these processes and tools seem overwhelming, don't worry. When you need them, they can be useful, and if you don't, you can usually avoid them. It's good to experiment with new tools like these on hobby projects, but if you go overboard, you'll end up spending more time configuring everything to work together than you will actually doing the project!</p>
+</section>
+
+<section data-type="sect1" id="wrapping-up-MysgIJ">
+<h1>Wrapping Up</h1>
+
+<p>So now we have a good overview of what testing is, as well as why it's useful and completely essential to refactoring. In the next chapter, we'll cover how to test your codebase, regardless of what state it's in.</p>
+</section>
+</section>
+
+<p>&nbsp;</p>
+
+  </body>
+</html>

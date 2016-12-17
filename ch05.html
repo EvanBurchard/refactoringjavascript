@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Refactoring JavaScript</title>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"> </script>
+    <link rel="stylesheet" type="text/css" href="theme/html/html.css">
+  </head>
+  <body data-type="book">
+    <section data-type="chapter" id="basic-refactoring-goals-jvns3">
+<h1>Basic Refactoring Goals</h1>
+
+<p>In Chapter 1, we discussed refactoring as a process of changing code safely and without changing behavior in order to improve quality. In Chapter 2 we looked at the complexity of the JavaScript ecosystem and therefore the difficulty in pinning down what style and quality means for us. In Chapters 3 and 4, we laid the ground work for testing, which is the easiest way to have confidence in our code, and a prerequisite to changing code safely, aka refactoring.</p>
+
+<p>In this chapter, we finally turn to the specific relationship of refactoring and quality. We had a diagram (figure 4.1, reproduced below as figure 5.1) in the last chapter that described the relationship between Testing &amp; Refactoring. Consider the main 3 questions in the diagram:</p>
+
+<ul>
+	<li>What's the situation?</li>
+	<li>Do you have enough coverage?</li>
+	<li>Is the code bad?</li>
+</ul>
+
+<figure id="id-r9uxfe"><img alt="" class="i_testing_in_action_png" src="_testing_in_action_.png">
+<figcaption><span class="label">Figure 5-1. </span>Testing and refactoring flow chart</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/_testing_in_action_.png">&nbsp;_testing_in_action_.png</a></p>
+
+<p>The first question should hopefully be very easy to answer. The second one can be addressed either by a coverage tool that runs with your test suite and outputs places specifically missing coverage. There are times when coverage tools may miss complex cases, so a line of code being covered does not necessarily mean we are confident in it. Code quality through the process of refactoring is absolutely dependent on confidence.</p>
+
+<p>In this chapter, we're developing a strategy to answer the third question: Is the code bad?</p>
+
+<p>Due to JavaScript's multi-paradigmatic nature, answering this question is not always easy. Even without using specialized libraries, we can strive to (or be forced to make) our code follow a few styles: object-oriented (prototypal or class-based), functional, or asynchronous (with promises or callbacks).</p>
+
+<p>Before we address what refactoring in those styles entails, we must deal with a paradigm that the worst code bases tend to employ: <em>unstructured imperative programming</em>. If those italics didn't scare you, perhaps a description of this type of code base in a front-end context will. Time for a spooky JavaScript story:<br>
+&nbsp;</p>
+
+<blockquote>
+<p>The JavaScript in the file, called "main.js," runs on page load. It's about 2000 lines. There are some functions declared, mostly attached to an object like <code>$</code> so that jQuery will do its magic. Others are declared with <code>function whatever(){}</code> so that they are in the global scope. Objects, arrays and other variables are created as needed along the way, and freely changed throughout the file. A half-hearted attempt at backbone, react, or some other framework was made at one point for a few crucial and complicated features. Those parts break often, as the team member who was initially excited about that framework has moved on to a startup that builds IoT litter boxes. The code is also heavily dependent on inline JavaScript inside of index.html.</p>
+</blockquote>
+
+<p>Although frameworks can help to make this type of code less likely, frameworks cannot and should not completely prevent the possibility of free-form JavaScript. However, this type of JavaScript is not inevitable, nor is it impossible to fix. The absolute first order of business is to understand functions, and not any of the fancy kinds. Through this chapter, we will be exploring six basic components of functions:</p>
+
+<ul>
+	<li>bulk (lines of code and code paths)</li>
+	<li>inputs</li>
+	<li>outputs (return values)</li>
+	<li>side effects</li>
+	<li>Context part 1: The Implicit Input</li>
+	<li>Context Part 2: Privacy</li>
+</ul>
+
+<aside data-type="sidebar" id="javascript-jenga-beHxiX">
+<h5>"JavaScript Jenga"</h5>
+
+<p>If the front-end JavaScript code base spooky story didn't resonate with you, perhaps a description of what working with one is like will sound more familiar.</p>
+
+<p>Programmers are tasked with making a changes to the front-end. Every time, they make as small of a change as possible, adding a bit of code and maybe some duplication. There is no test suite to run, so in lieu of confidence, the tools available to ensure the code base are 1) performing as many manual checks of critical functionality as is allowed by time and patience and 2) hope. The code base gets larger and a bit more unstable with every change.</p>
+
+<p>Occasionally, a critical bug sneaks in, and the whole stack of blocks topples over, right in front of the user of the site. The only saving grace about this system is that version control allows the unstable (but mostly ok... probably?) previous version of the blocks to be set up without too much trouble.</p>
+
+<p>This is technical debt in action. This is JavaScript Jenga.</p>
+</aside>
+
+<p>&nbsp;</p>
+
+<p>Throughout the rest of this chapter, we will be using a tool for diagramming JavaScript called Trellus. All the diagrams in this chapter were generated with it, and you can diagram your own functions at <a href="http://trell.us">trell.us</a>.</p>
+
+<p>Here's how it starts: Functions are just a circle.</p>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function.png">&nbsp;function.png</a></p>
+
+<figure id="id-L7u0fN"><img alt="" class="idiagramsfunctionpng" src="diagrams/function.png">
+<figcaption><span class="label">Figure 5-2. </span>Just a circle</figcaption>
+</figure>
+
+<p>Simple enough. It's just a circle. We'll be adding parts to represent the following:</p>
+
+<ul>
+	<li>bulk</li>
+	<li>inputs</li>
+	<li>outputs (return values)</li>
+	<li>side effects</li>
+	<li>context</li>
+	<li>privacy</li>
+</ul>
+
+<p>Before the chapter is through, we will explore all of these components through this diagramming technique, making note of qualitative differences between them along the way.</p>
+
+<section data-type="sect1" id="function-bulk-EQsYU0">
+<h1>Function Bulk</h1>
+
+<p>We use the term "bulk" to describe function bodies. It refers to two different, but related characteristics:</p>
+
+<ul>
+	<li>Complexity</li>
+	<li>Lines of code</li>
+</ul>
+
+<p>JavaScript Linters (described in Chapter 3) pick up on both of these things. So if you're using one as part of a build process (or preferably within your editor), you should see warnings for both.</p>
+
+<p>There are no strict rules on bulk. Some teams like functions to be 25 or fewer lines of code. For others, 10 or fewer is the rule. As far as as complexity (aka. "cyclomatic complexity" or "the number of code paths you should be testing"), upper limits tend to be around six. By "code path" or "branch of code," we mean one possible flow of execution. Branches of code can be created in a few ways, but the simplest way is through <code>if</code> statements. For example:</p>
+
+<pre data-type="programlisting">
+if(someCondition){
+  // branch 1
+} else {
+  // branch 2
+};
+
+function(error){
+  if(error){
+    return error; // branch 1
+  };
+  // branch 2
+};
+</pre>
+
+<p>Too much of one type of bulk will probably indicate the other type. A one-hundred line function probably has too many potential code paths as well. Similarly, a function with several switch statements and variable assignments will probably have a bulky line count too.</p>
+
+<p>The problem with bulk is that it makes the code harder to understand and harder to test. The resulting lack of confidence is the exact scenario that leads to JavaScript Jenga.</p>
+
+<aside data-type="sidebar" id="in-defense-of-bulk-9nHNUnUb">
+<h5>In Defense of Bulk</h5>
+
+<p>Although classical refactoring techniques and trends in composable structures within frameworks and JavaScript packages point toward small functions (as well as objects and "components") being a preferable approach, there are detractors.</p>
+
+<p>No one is rushing to defend 200 line functions on principle, but you may occasionally encounter some that are critical of "tiny functions that don't do anything but tell some other function to do something," which makes the logic "hard to follow."</p>
+
+<p>This is tricky. Although following logic from function to function takes some patience and practice when compared to reading straight through a function, ideally there is less context to keep in your head and testing small functions is way easier.</p>
+
+<p>All that said, after testing, being able to extract new functions and reduce bulk in extant ones is <em>the most important skill</em> to learn for refactoring. In doing so, however, one must make the higher-level code with consideration of the interface's ability to hide its implementation appropriately. That demands naming things well, and having sensible inputs/outputs. If every function was named some variant of <em><code>passResultOfDataToNextFunction</code></em>, then extracting functions will only scatter the implementation, meaning the bulk would be preferable.</p>
+
+<p>This book argues against bulk, but in your team, you might have to put up with a bit more bulk than what your preference may be. Be aware that reducing bulk, as with any refactoring target, may face objections both on stylistic preferences and (real or perceived) importance with respect to other development objectives.</p>
+
+<p>Although it's a less common shape for bad code to take, if you find that your code goes too far in delegating functions for your comfort, just inline the functions. It's not a hard thing to do:</p>
+
+<pre data-type="programlisting">
+function outer(x, y){
+  return inner(x, y);
+};
+function inner(x, y){
+  // setup
+  return //something with x and y
+};
+</pre>
+
+<p>You have a few choices here. If outer is the only thing calling inner, you could just move the function body from inner into outer, keeping in mind that you'd need:</p>
+
+<pre data-type="programlisting">
+function outer(x, y){
+  // setup 
+&nbsp;&nbsp;return // something with x and y
+};</pre>
+
+<p>Or if the // setup part is complex enough, and there are a lot of calls to <code>inner</code> that don't come from <code>outer</code>, you might want to delete <code>outer</code>, change any calls from <code>outer()</code> to <code>inner()</code>, and as necessary, negate or adjust the <code>//setup</code> you used for inner.</p>
+
+<p>If you find yourself confused by inner functions, inlining them <em>and then</em> extracting new ones is a great way to explore the code. As always, have tests in place, and be ready to roll back to an earlier version.</p>
+</aside>
+
+<p>&nbsp;</p>
+
+<p>Let's add a few pieces to our diagram to help us represent bulk, and while we're at it, we'll give our functions names. We simply have a box that states the function name and the number of lines that the function has. To represent the paths of code (complexity) of our function, we can add pie slices. Slices filled in as grey are tested, and white ones are untested. Here are two examples:</p>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_bulk_1.png">&nbsp;function_with_bulk_1.png</a></p>
+
+<figure id="id-eVumF5Uk"><img alt="" class="idiagramsfunction_with_bulk_1png" src="diagrams/function_with_bulk_1.png">
+<figcaption><span class="label">Figure 5-3. </span>7 Lines. One out of two code paths is tested</figcaption>
+</figure>
+
+<figure id="id-0gudiRUe"><img alt="" class="idiagramsfunction_with_bulk_2png" src="diagrams/function_with_bulk_2.png">
+<figcaption><span class="label">Figure 5-4. </span>45 lines. Eight code paths, all tested.</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_bulk_2.png">&nbsp; function_with_bulk_2.png</a></p>
+
+<p>The one on the top has two code paths and 7 lines of code. One of the code paths is tested (grey) and one is not (white).</p>
+
+<p>The one on the bottom is bulkier, with 45 lines of code and 8 code paths (eight pie slices). But because all of the pie slices are filled in with grey, we know that each of the eight code paths is tested.</p>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="inputsandnbsp-3DsLSn">
+<h1>Inputs&nbsp;</h1>
+
+<p>For our purposes, we will consider three types of inputs to a function: explicit, implicit, and non-local. In the following function, we would say <code>a</code> and <code>b</code> are <em>explicit inputs</em>, (aka. <em>explicit parameters</em> or <em>formal parameters</em>), because these inputs are part of the function definition.</p>
+
+<pre data-type="programlisting">
+function add(a, b){
+  return a + b;
+};
+</pre>
+
+<p>Incidentally, if we call <code>add(2, 3)</code> later on, <code>2</code> and <code>3</code> are "actual parameters," "actual arguments," or just "arguments" because they are used in the <em>function call</em>, as opposed to "formal parameters," which occur in the <em>function definition</em>. People mix up the arguments vs. parameters thing all the time, so don't worry too much about it if you mix them up too. The main thing is that what we're calling "<em>explicit</em> parameters" appear inside of the function definition.</p>
+
+<figure id="id-wpuWfvSJ"><img alt="" class="idiagramsfunction_with_two_explicit_inputspng" src="diagrams/function_with_two_explicit_inputs.png">
+<figcaption><span class="label">Figure 5-5. </span>An <code>add</code> function with two explicit parameters</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_two_explicit_inputs.png">&nbsp; function_with_two_explicit_inputs.png</a></p>
+
+<p>Note that we are describing the "type" of the inputs (<code>number</code>), rather than specific values or references to the formal parameters of the function signature (<code>a</code> and <code>b</code>). Since JavaScript doesn't care what types you pass in, our names will also not necessarily map to specific types of primitives or objects that we're passing.</p>
+
+<p>Although we're not diving deeply into objects here, the <em>implicit input</em> or <em>implicit parameter</em> in the <code>addTwo</code> function below is the <code>calculator</code> object that the function is defined inside of:</p>
+
+<pre data-type="programlisting">
+var calculator = {
+  add: function(a, b){
+    return a + b;
+  },
+  addTwo: function(a){
+&nbsp;&nbsp;&nbsp;&nbsp;return this.add(a, this.two);
+  },
+  two: 2
+};</pre>
+
+<figure id="id-q3uLSdSw"><img alt="" class="idiagramsfunction_with_on_explicit_input_one_implicit_inputpng" src="diagrams/function_with_on_explicit_input_one_implicit_input.png">
+<figcaption><span class="label">Figure 5-6. </span><code>addTwo</code> function with explicit input (number) and implicit input (<code>calculator</code>)</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_on_explicit_input_one_implicit_input.png">&nbsp; function_with_on_explicit_input_one_implicit_input.png</a></p>
+
+<p>In JavaScript the implicit parameter is referred to by <code>this</code>. You may have seen it as <code>self</code> in other languages. Keeping track of <code>this</code> is probably the most confusing thing in JavaScript, and we'll talk about it a bit more in the "Context" section of this chapter.</p>
+
+<p>The third type of inputs, <em>non-local</em> (commonly known as "free variables") can be especially tricky, especially in their ultimate form, the dreaded global variable. An innocent-looking example can be seen below:</p>
+
+<pre data-type="programlisting">
+var name = "Max";
+var punctuation = "!";
+function sayHi(){
+  return "Hi " + name + punctuation;
+};</pre>
+
+<figure id="id-lPuyHGSw"><img alt="" class="idiagramsfunction_with_two_non_local_inputspng" src="diagrams/function_with_two_non_local_inputs.png">
+<figcaption><span class="label">Figure 5-7. </span>The <code>sayHi</code> function has 2 non-local inputs: <code>name</code> and <code>punctuation</code></figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_two_non_local_inputs.png">&nbsp; function_with_two_non_local_inputs.png</a></p>
+
+<p>Is it so innocent though? The <code>name</code> and <code>punctuation</code> can be redefined, and the function can still be called at any point. The function has no opinion or guard against that. It may not jump out as a problem in these five lines, but when a file is 200 or 300 lines long, variables floating around like this make life more difficult, as they could change at any point.</p>
+
+<div data-type="warning" id="name-is-not-a-great-name-EgS9IESB"><h6>Warning</h6>
+<h1><code>name</code> is not a great name</h1>
+
+<p>Although it's not perfectly supported across all implementations, <code>name</code> happens to be a property of function objects for many contexts. When in doubt, it makes sense to avoid it.</p>
+</div>
+
+<p>In testing, figuring out what inputs you need to set up can take more time than any other task involved. When explicit inputs are complex objects, this can be difficult enough (although it can be helped by factories and fixtures as discussed in Chapter 3), but if your function relies on implicit input heavily (or worse, non-local/global inputs), then you have that much more set up to do. Implicit state (using a "<code>this</code>") isn't as bad as non-local input. Actually, Object-Oriented Programming relies on using it intelligently.</p>
+
+<p>The recommendation here is to have your functions, as much as possible rely on explicit inputs (which hints at FP style), followed by implicit inputs, aka. <code>this</code> (which hints at OOP style), followed in a distant third by non-local/global state. An easy way to guard against non-local state is to wrap as much of the code up in modules, functions, and classes (which, yes, are actually functions in disguise) as possible.</p>
+
+<p>Note that even when state is explicit, JavaScript allows a wide range of flexibility in how parameters are passed. In some languages, formal parameters (the parts of a function definition that specific explicit inputs) require the types (eg. int, boolean, <em><code>MyCoolClass</code></em>, etc.) to be specified as well as the parameter name. There is no such restriction in JavaScript. This leads to some convenient possibilities. Consider the following:</p>
+
+<pre data-type="programlisting">
+function trueForTruthyThings(sometimesTruthyThing){
+  return !!(sometimesTruthyThing);
+};
+</pre>
+
+<p>When calling this function, we could pass in a parameter of any type we wanted. It could be a boolean, an array, an object, or any other type of variable. All that matters is that we can use the variable inside of the function. This is a very flexible approach, which can be handy, but can also make it difficult to know what types of parameters are required in order to exercise a function under test.</p>
+
+<p>JavaScript offers two additional approaches which increase flexibility even further. The first is that the number of formal parameters doesn't have to correspond with the number passed into the function call. Take a function like:</p>
+
+<pre data-type="programlisting">
+function add(a, b){
+  return a + b;
+};
+</pre>
+
+<p>This will happily return 5 if you call it as <code>add(2, 3)</code> but also if you call it as <code>add(2, 3, 4)</code>. The formal parameters don't care what you passed in, only the function body does. You can even supply less arguments, as in this: <code>add(2)</code>. This will return <code>NaN</code> because 2 is being added to <code>undefined</code>, although in Chapter 11, we'll explore a technique called "currying" that makes it useful to supply less arguments than specified by the formal parameters.</p>
+
+<p>As for extra arguments supplied to a function call, it is possible to recover and use them in the function body, but using this functionality should be used cautiously, as it complicates a testing procedure that benefits from simple inputs, and less bulk in the function body.</p>
+
+<p>One last trick that the formal parameters can play in JavaScript is allowing not just simple types, but also objects and functions as parameters. Sometimes, this extreme amount of flexibility can be useful, but consider the following case:</p>
+
+<pre data-type="programlisting">
+function doesSomething(options){
+  if(options.a){
+    var a = options.a;
+  }
+  if(options.b){
+    var b = options.b;
+  }
+  ...
+}
+</pre>
+
+<p>If you have a mystery object or function that are passed in at run-time, you have potentially bloated your test cases without realizing how. By hiding the values needed inside of a object called something generic like <code>params</code> or <code>options</code>, your function body should hopefully supply guidance on how those values are used and clues about what they are. Even with clarity inside of the function body, it's definitely preferable to used parameters with real names to keep the interface smaller and help to document the function right up top.</p>
+
+<p>There is nothing wrong with passing a whole object to a function, rather than breaking it all into named individual parameters, but calling it "params" or "options," might hint that the function is doing too much. If the function does take a specific type of object, it should have a specific name. See more about renaming things in Chapter 6.</p>
+
+<div data-type="note" id="a-bit-about-ecmascript-60SXImSB"><h6>Note</h6>
+<h1>A Bit About EcmaScript</h1>
+
+<p>We briefly discussed the ECMAScript (ES) Specification as what to watch for updates to JavaScript (keeping in mind that libraries and implementations may either lag behind or actually be ahead of the curve). What we didn't talk about is how ES naming conventions work. As a relatively new convention, they dropped version numbers like "ES6" in favor for yearly releases like "ES2015" (which happens to correspond to ES6). Whatever version is to come out next is described as "ESNext." As of this writing, this convention hasn't been in practice long, so don't be shocked if this changes again in the future.</p>
+</div>
+Prior to ES2015, passing an object to a function call offered the advantage of somewhat illustrating the function signature (what parameters are used) as opposed to having what could be just magic strings or numbers. Compare these two:
+
+<pre data-type="programlisting">
+search('something', 20);
+//vs.
+search({query: 'something', pageSize: 20});</pre>
+
+<p>The first function definition would necessarily include explicitly named parameters. The second would likely have one parameter named, at best, <code>searchOptions</code>, and at worst <code>options</code>. The first (<code>searchOptions</code>) does not offer much more detail to document the call, but is at least potentially unique.</p>
+
+<p>However, there is a way (thanks to ES2015) that you can have clarity in the calls and in the definitions:</p>
+
+<pre data-type="programlisting">
+function search({query: query, pageSize: pageSize}){
+  console.log(query, pageSize);
+};
+search({query: 'something', pageSize: 20});
+</pre>
+
+<p>It's a little awkward, but it allows you to be specific in both places. It avoids the pitfalls of sending the wrong types of arguments or mindlessly passing a <em><code>params</code></em> object through to another function call (maybe after some manipulations first). Honestly, that second pattern is so bad and rampant, that this somewhat awkward construct still looks pretty great by comparison. If you're curious about this feature that makes this work, it's called "destructuring" and there's a lot to it. It's for assignments in general (not just params), and you can use it with arrays as well as objects.</p>
+
+<p>If you use a function as a parameter (a "callback") into the mix, then you could be adding significantly more bulk. Every function call now has the potential to require any number of new test cases to support it.</p>
+
+<aside data-type="sidebar" id="about-sad-paths-MmHJcRSY">
+<h5>About "Sad Paths"</h5>
+
+<p>We discussed earlier about how coverage does not necessarily equate to confidence. "Sad Paths" are one particular reason why. The problem might be a data integrity issue from a user interaction gone awry (eg. an incorrectly formatted form entry step that allows bad data to get into the database).</p>
+
+<p>Even if your code tests each branch of an if-else clause inside your function, some inputs will cause problems. This includes not just unexpected parameters passed to the function, but also non-local inputs such as what time or date it is, as well as random numbers.</p>
+
+<p>In languages with strict type checking systems (unlike JavaScript), a good number of these sad paths go away. Yet, automated coverage tools will not help you here. Sad Paths will likely be hidden in the code (and test cases) that you didn't write.</p>
+
+<p>Mutation testing, as described earlier, can be of some help here. But considering that there are potentially infinite error causing inputs to your functions in JavaScript (and the more flexibility you insist on, the more likely you are to hit one), the best defense against sad paths is to ensure your inputs will be evaluated correctly by your function ahead of time. Otherwise, you're stuck with seeing the bug happen live, and then writing a regression test and code to handle it.</p>
+
+<p>Note that because of input validation (or using more robust mechanisms inside of a function) a sad path will not necessarily mean a new path of code that would require a new pie slice in our diagramming method.</p>
+</aside>
+
+<p>Passing in functions as inputs to a function can be done in a rational way, but not realizing the trade offs between simplicity in testing and flexibility is a mistake.</p>
+
+<p>The overall recommendation for this section is to have simple and explicit inputs whenever possible, both in the function definitions and calls. This makes testing a great deal easier.</p>
+
+<p>Here are a few recommendations to wrap up our discussion on inputs:</p>
+
+<ul>
+	<li>Overall, the fewer inputs you have, the easier it will be to keep bulk under control and test your code.</li>
+	<li>The fewer non-local inputs you have, the easier your code will be to understand and test.</li>
+	<li>Every function has a <code>this</code> as an implicit input, however, <code>this</code> may be unused, or even <code>undefined</code> in a lot of cases. If <code>this</code> is unused, feel free not to add the <code>thisType ~&gt;</code> part of the diagram.</li>
+	<li>Most of all, explicit inputs are more reliable than <code>this</code> or non-local inputs.</li>
+</ul>
+</section>
+
+<section data-type="sect1" id="outputs-kbsQcv">
+<h1>Outputs</h1>
+
+<p>By outputs, we mean the value that is returned from a function. In our ideal style, we always want to return something. There are cases where this is hard or not true (some asynchronous styles and procedural, side-effect driven code), but we'll deal with asynchronous code in Chapter 10, and discuss side-effects later on in this chapter (as well as in Chapter 11).</p>
+
+<p>One of the most common mistakes you will see in a function is ignoring the output, by not returning anything.</p>
+
+<pre data-type="programlisting">
+function add(a, b){
+  a + b;
+};
+</pre>
+
+<p>In this case, it's pretty clear that the <code>return</code> keyword has been omitted, which means this function will simply return <code>undefined</code>. This can be easy to miss for two reasons. First of all, not all languages are the same. Rubyists (a lot of whom write JavaScript as their second language), will sometimes forget the <code>return</code> statement because the last line in a ruby function is returned implicitly.</p>
+
+<div data-type="note" id="void-functions-VJSrCec3"><h6>Note</h6>
+<h1>Void functions</h1>
+
+<p>If no value is explicitly returned in JavaScript (using the <code>return</code> keyword), <code>undefined</code> will be returned. Since this provides little to no information about what the function did, even in the traditional case of using a void function for side-effect producing functions, there is likely some information of value produced by the side-effect, even just if it is just the result or simply the success of the side-effect. When the side-effect specifically changes the context (<code>this</code>), returning <code>this</code> is also a viable option.</p>
+
+<p>It is recommended that you return real values when possible rather than explicitly returning <code>undefined</code>/<code>null</code> or implicitly returning <code>undefined</code>.</p>
+</div>
+
+<p>Secondly, if the style of most of the code base consists of side-effects (covered next), then the return value is less important than that effect. This is especially common in jQuery supported code bases where almost every line is a click handler that runs a callback (which is often fancy side-effect code). Programmers used to side-effect based code will also tend to fail to <code>return</code> anything.</p>
+
+<figure id="id-VduQuec3"><img alt="" class="idiagramsfunction_with_no_returnpng" src="diagrams/function_with_no_return.png">
+<figcaption><span class="label">Figure 5-8. </span>This <code>add</code> function doesn't have specify a return value, so it defaults to <code>undefined</code></figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_no_return.png">&nbsp; function_with_no_return.png</a></p>
+
+<p>However, the function below returns something:</p>
+
+<pre data-type="programlisting">
+function add(a, b){
+&nbsp; return a + b;
+};
+</pre>
+
+<figure id="id-0gubsQce"><img alt="" class="idiagramsfunction_returning_numberpng" src="diagrams/function_returning_number.png">
+<figcaption><span class="label">Figure 5-9. </span><code>add</code> function that <code>returns</code> a number</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_returning_number.png">&nbsp; function_returning_number.png</a></p>
+
+<p>Generally speaking, we want a decent return value (not <code>null</code> or <code>undefined</code>), and we want the types from various code paths to match (ie. returning a string sometimes and a number other times means you will probably have a few <code>if/else</code> statements in your future. Also returning an array with mixed types can be similarly awkward when compared with returning a simple value or an array of like types.</p>
+
+<div data-type="note" id="strongly-typed-languages-MDSWHocY"><h6>Note</h6>
+<h1>Strongly-Typed languages</h1>
+
+<p>Some languages have mechanisms to prescribe that return values (and inputs) be of a particular type (or explicitly return nothing). As we saw with how JavaScript handles inputs, we should not be surprised to find a similar flexibility for return values.</p>
+
+<p>We'll get into this more in Chapter 11.</p>
+</div>
+
+<p>The recommended approach to output values is to, whenever possible, return a consistent and simple value, and avoid that value being <code>null</code> or <code>undefined</code>. With functions that cause destructive actions (like altering an array or changing the DOM), it can be nice to return an object that what effect took place. Sometimes that just means returning <code>this</code>. Returning something informative, even when nothing was explicitly asked for is a good habit to be in, and helps in testing and debugging.</p>
+
+<p>One additional complication for outputs is functions that return different types. Consider this function:</p>
+
+<pre data-type="programlisting">
+function moreThanThree(number){
+  if(number &gt; 3){
+    return true;
+  } else {
+    return "No. The number was only " + number + ".";
+  }
+};</pre>
+
+<p>This function returns either a boolean or a string. This isn't great because code that calls this function will likely have their own conditionals to check for which type was returned.</p>
+
+<figure id="id-3duxCqc2"><img alt="" class="idiagramsfunction_with_complex_outputpng" src="diagrams/function_with_complex_output.png">
+<figcaption><span class="label">Figure 5-10. </span>This function could return a boolean or a string.</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_complex_output.png">&nbsp; function_with_complex_output.png</a></p>
+
+<p>As is the theme so far for this chapter, simpler is better when it comes to outputs (return types). Returning different types of values can complicate the code. Additionally, we want to avoid returning a <code>null</code> or <code>undefined</code> as a better solution is likely available. Finally, we should strive to return values that are of the same type (or types implementing interfaces that won't require a conditional check after or around the function call), regardless of which value is returned.</p>
+</section>
+
+<section data-type="sect1" id="side-effects-XKslsL">
+<h1>Side Effects</h1>
+
+<p>Some languages find side-effects to be so <em>dangerous</em> that they make it very difficult to introduce them. JavaScript doesn't mind the danger at all. As it is used in practice, one of jQuery's main jobs (if not its primary responsibility) is to manipulate the DOM, and this happens through side-effects.</p>
+
+<p>The good part about side effects is that they are usually directly responsible for all the work anyone cares about. Side effects update the DOM. Side effects update values in the database. Side effects make <code>console.log</code> happen.</p>
+
+<p>Despite all that side effects make possible, our goal is to isolate them and limit their scope. Why? Two reasons. One is that functions with side effects are harder to test. Second is that they necessarily have some effect on (and/or rely on) state that complicates our design.</p>
+
+<p>We will discuss side-effects much more in Chapter 11, but for now, lets update our symbolic diagramming of side-effects. Here is a simple example:</p>
+
+<pre data-type="programlisting">
+function printValue(value){
+  console.log(value);
+};</pre>
+
+<figure id="id-VdubTVs3"><img alt="" class="idiagramsfunction_with_side_effectpng" src="diagrams/function_with_side_effect.png">
+<figcaption><span class="label">Figure 5-11. </span>A function with a very common side effect: logging</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_side_effect.png">&nbsp;function_with_side_effect.png</a></p>
+
+<p>Notice that because this function does not return anything, the return value is <code>undefined</code>.</p>
+
+<p>Ideally, the fewer side-effects the better, and where they must exist, they should be isolated if possible. One update to some well-defined interface (say, a single database row), is easier to test than multiple updates to it, or multiple database rows.</p>
+</section>
+
+<section data-type="sect1" id="context-part-1-the-implicit-input-YKs5FY">
+<h1>Context Part 1: The Implicit Input</h1>
+
+<p>In explaining inputs and outputs, we skimmed over something somewhat complex but very important, that we will cover now. The "implicit input," appears on the left of the diagrams as <code><em>someThisValue</em> ~&gt;</code>. <em><code>someThisValue</code></em> is the "<code>this</code>" that we've been talking about so far.</p>
+
+<p>So what is "<code>this</code>?"</p>
+
+<p>Depending on your environment, outside of any other context, <code>this</code> could refer to a base object particular to the environment. Try typing <code>this</code> (and enter) in a browser's interpreter (console). You should get back the <code>window</code> object that provides the kinds of functions and subobjects you might expect, such as <code>console.log</code>. In a node shell, typing <code>this</code> will yield a different type of base object, with a similar purpose. So in those contexts, typing any of these things will all give you '<code>blah</code>'.</p>
+
+<pre data-type="programlisting">
+console.log('blah');
+this.console.log('blah');
+window.console.log('blah'); // in a browser
+global.console.log('blah'); // in a node shell
+</pre>
+
+<p>Interestingly enough, if you save a node file and run it, <code>this</code> prints as an empty object, <code>{}</code> , but <code>global</code> works as in the node shell and <code>global</code> objects like <code>console</code> are still available to use. Although <code>this.console.log</code> won't work in a node file that you run, <code>global.console.log</code> will. That is related to how the node module system works. It's a bit complicated, but know that the top-level scope in most environments is also <code>this</code>, but in node, it's the module scope. Either way, it's fine, because most of the time you don't want to define functions or variables in the global name space anyways.</p>
+
+<p>In any case, we can expect our this to be the top-level scope when we check it inside of functions declared in the top-level scope:</p>
+
+<pre data-type="programlisting">
+var x = function(){
+&nbsp; console.log(this);
+}
+x(); // here, we'll see our global object, even in node files
+</pre>
+
+<p>So that is top-level scope in a nutshell. Let's diagram this last code listing with its implicit input.</p>
+
+<figure id="id-0guASPFe"><img alt="" class="idiagramsfunction_with_global_implicitpng" src="diagrams/function_with_global_implicit.png">
+<figcaption><span class="label">Figure 5-12. </span>This function has the global object as its <code>this</code> value</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_global_implicit.png">&nbsp; function_with_global_implicit.png</a></p>
+
+<section data-type="sect2" id="this-in-strict-mode-gMsKsPFA">
+<h2><code>this</code> in strict mode</h2>
+
+<p>When you're in strict mode, <code>this</code> will behave differently. For this code:</p>
+
+<pre data-type="programlisting">
+var x = function(){
+  'use strict'
+&nbsp; console.log(this);
+}
+x();</pre>
+
+<p><code>undefined</code> will be logged. In strict mode, not every function has a <code>this</code>. If you create this script and run it with node:</p>
+
+<pre data-type="programlisting">
+'use strict'
+var x = function(){
+&nbsp; console.log(this);
+}
+x();
+</pre>
+
+<p>You will see the result (<code>this</code> is <code>undefined</code>). However, typing this second code snippet line by line in a node REPL (just type <code>node</code> at the terminal) or in a browser console will not apply strict mode to <code>x</code>, and the global object will be returned.</p>
+
+<p>The trellus function diagram for <code>x</code> in the first snippet looks like this:</p>
+
+<figure id="id-kluduqsxFy"><img class="idiagramsfunction_with_undefined_implicitpng" src="https://git.atlas.oreilly.com/oreillymedia/refactoring-javascript/raw/master//diagrams/function_with_undefined_implicit.png?private_token=3ppj3Dm4e6C5wCiE5CQW">
+<figcaption><span class="label">Figure 5-13. </span>function with a <code>this</code> value of <code>undefined</code></figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_with_undefined_implicit.png">&nbsp; function_with_undefined_implicit.png</a></p>
+
+<p>Now the function is 4 lines long, still returns undefined as it did before. The side-effect (which now logs <code>undefined</code> instead of the global object) is still present. The most crucial difference is that this no longer attaches to any <code>this</code> object other than <code>undefined</code>.</p>
+</section>
+
+<p>&nbsp;</p>
+
+<p>Whether you're writing a node module or any decently sized program on the front-end, you'll generally want only one or a small handful of variables to be scoped inside of the top-level scope (something has to be defined there, or you wouldn't be able access anything from the outermost context).</p>
+
+<p>One way to create a new context is by using a simple object like this:</p>
+
+<pre data-type="programlisting">
+var anObject = {
+&nbsp; number: 5,
+&nbsp; getNumber: function(){ return this.number }
+}
+
+console.log(anObject.getNumber());
+</pre>
+
+<p>Here, <code>this</code> is not the global, but <code>anObject</code>. There are other ways to set a context, but this is the simplest. By the way, because you're creating a literal object with the <code>{}</code> syntax, this is called an "object literal."</p>
+
+<p>Keeping in mind that we're diagramming functions, not objects. Let's see what our <code>getNumber</code> function looks like.</p>
+
+<figure id="id-klurfpFg"><img alt="" class="idiagramsfunction_attached_to_anobjectpng" src="diagrams/function_attached_to_anObject.png">
+<figcaption><span class="label">Figure 5-14. </span><code>getNumber</code> attached to a <code>this</code> of <code>anObject</code></figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_attached_to_anObject.png">&nbsp; function_attached_to_anObject.png</a></p>
+We have a few more ways to write code that will follow the diagram as well as the interface. First is the <code>Object.create</code> pattern.
+
+<pre data-type="programlisting">
+var anObject =
+Object.create(null, {"number": {value: 5},
+"getNumber": {value: function(){return this.number}}})
+console.log(anObject.getNumber());
+</pre>
+
+<p>Next is how you would attach <code>getNumber</code> to <code>anObject</code> using classes.</p>
+
+<pre data-type="programlisting">
+class AnObject{
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this.number = 5;
+&nbsp;&nbsp;&nbsp; this.getNumber = function(){return this.number}
+&nbsp; }
+}
+anObject = new AnObject;
+console.log(anObject.getNumber());</pre>
+
+<div data-type="note" id="some-people-really-really-hate-classes-oLSvc5Fn"><h6>Note</h6>
+<h1>Some people really, really hate classes</h1>
+
+<p>Pretty much everyone likes object literals. Some people like <code>Object.create</code>. Some people like classes. Some people like writing constructor functions that behave a lot like classes, without all of the "syntactic sugar."</p>
+
+<p>Some objections to classes are that they obscure the purity and power of JavaScript's prototypal system... but on the other hand, a typical demonstration of this power and flexibility is the creation of an awkward, ad hoc class system.</p>
+
+<p>Other objections to classes are based around inheritance being worse than delegation and/or composition, which is valid, although fairly unrelated to the use of <em>just</em> the <code>class</code> keyword.</p>
+
+<p>If you are using the <code>new</code> keyword, whether from a class or a constructor function, <code>this</code> will be attached to a new object that is returned by the call to <code>new</code>.</p>
+
+<p>In an OOP approach, you might find yourself using objects for simple things and object producing classes/factory functions/etc., whereas in FP style, you will probably find yourself using less classes.</p>
+
+<p>JavaScript doesn't seem to care how you write it. Perhaps you'll find FP style to be more maintainable, but a given project or team could have significant inertia invested in an OOP style.</p>
+</div>
+
+<p>Your <code>this</code> can also change through use of the <code>call</code>, <code>apply</code>, and <code>bind</code> functions. <code>call</code> and <code>apply</code> are used in exactly the same way if you're not passing any explicit inputs to the function. <code>bind</code> is like <code>call</code> or <code>apply</code>, but for saving the function (with the bound <code>this</code>) for later use.</p>
+
+<pre data-type="programlisting">
+var anObject = {
+&nbsp; number: 5
+}
+var anotherObject = {
+&nbsp; getNumber: function(){ return this.number }
+}
+console.log(anotherObject.getNumber.call(anObject));
+console.log(anotherObject.getNumber.apply(anObject));
+var callForTheFirstObject = anotherObject.getNumber.bind(anObject);
+console.log(callForTheFirstObject());
+</pre>
+
+<p>Note that neither object has both the number and the function. They need each other. Since we're using <code>bind</code>, <code>call</code>, or <code>apply</code> our diagram actually doesn't have to change. As we are using it, <code>this</code> still refers to <code>anObject</code>, even though the function is defined on <code>anotherObject</code>.</p>
+
+<figure id="id-GbudHLF7"><img alt="" class="idiagramsfunction_attached_to_anobjectpng" src="diagrams/function_attached_to_anObject.png">
+<figcaption><span class="label">Figure 5-15. </span>Nothing is actually changed here. <code>getNumber</code> still has <code>anObject</code> as its <code>this</code>.</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_attached_to_anObject.png">&nbsp; function_attached_to_anObject.png</a></p>
+
+<p>What's new here is that, although the function lives in <code>anotherObject</code>, the use of <code>bind</code>, <code>call</code> and <code>apply</code> are used to assign the "implicit" input (<code>this</code>) in an "explicit" way to <code>anObject</code>.</p>
+
+<p>You might be confused about why the diagram (Fig 5-15) has <code>anObject</code> as its implicit parameter, even though the function is defined inside of <code>anotherObject</code>. It is because we're diagramming the function calls that are like this:</p>
+
+<pre data-type="programlisting">
+anotherObject.getNumber.call(anObject);</pre>
+
+<p>We're diagramming from the perspective of a function. We could also diagram the following function call:</p>
+
+<pre data-type="programlisting">
+anotherObject.getNumber();</pre>
+
+<p>And then <code>anotherObject</code> would be the implicit parameter (the <code>this</code>), but its return type would be <code>undefined</code>, not <code>number</code>.</p>
+
+<p>Let's look at one more example.</p>
+
+<pre data-type="programlisting">
+var anObject = {
+&nbsp; number: 5
+}
+var anotherObject = {
+&nbsp; getIt: function(){ return this.number },
+&nbsp; setIt: function(value){ this.number = value; return this; }
+}
+console.log(anotherObject.setIt.call(anObject, 3));
+</pre>
+
+<p>Note that <code>setIt</code> code returns its <code>this</code> value, so if you run this code, you will see the full <code>anObject</code> object with the updated value: <code>{ number: 3 }</code>. This is what <code>return this</code> in the <code>setIt</code> function does. Otherwise, we would have just the side-effect (mutating the <code>anObject</code>'s <code>number</code>) and no clear confirmation of what happened. Instead, returning <code>this</code> makes testing (manually or automatically) much easier than just returning <code>undefined</code> from side-effect causing methods.</p>
+
+<p>Let's look at the diagram for <code>setIt</code> as it is called by the <code>call</code> function.</p>
+
+<figure id="id-KMulFJFJ"><img alt="" class="idiagramsfunction_setitpng" src="diagrams/function_setIt.png">
+<figcaption><span class="label">Figure 5-16. </span>Has a side-effect, but still returns something useful.</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_setIt.png">&nbsp; function_setIt.png</a></p>
+
+<p>Note that even though it is a side-effect producing method, we have returned something, specifically, our <code>this</code> from <code>anotherObject</code>. As described, earlier, that can help to simplify verification and testing as compared with simply returning <code>undefined</code>. Additionally, returning <code>this</code> opens us up to to the possibility of having a <em>fluent interface</em>, which means we could chain functions like this:</p>
+
+<pre data-type="programlisting">
+object.setIt(3).setIt(4).setIt(5);</pre>
+
+<div data-type="note" id="fluent-interfaces-1JSYgt3FJ"><h6>Note</h6>
+<h1>Fluent Interfaces</h1>
+
+<p>Fluent interfaces can be useful for things like aggregating database query conditions or bundling up DOM manipulations (jQuery does this). You might also see this described as "chaining functions." This is a common and useful pattern in both OOP and FP styles. In OOP, it tends to be a result of returning <code>this</code>, whereas in FP, it is commonly the result of <code>map</code>, which returns an object (or <em>functor</em>, actually) of the same type (for instance, arrays "map" to other arrays and promises "then" onto other promises).</p>
+
+<p>In FP style (and in the wrapper OOP patterns), you'll see more of this:</p>
+
+<pre data-type="programlisting">
+f(g(h()));</pre>
+
+<p>That might seem very awkward in comparison with fluent interfaces, but, the FP has great strategies for combining/composing functions. We'll look at those more in Chapter 11.</p>
+</div>
+
+<p>All this is to say, if you're just returning <code>undefined</code> anyways, returning <code>this</code> instead will provide more information and better interfaces.</p>
+
+<p>As far as context goes, that's about as complicated as it gets without delving into prototypes (and the 3 or 4 things that means), inheritance, mixins, modules, constructors, factory functions, properties, descriptors, getters, and setters.</p>
+
+<p>After this chapter, it's all about <em>better code</em> through <em>better interfaces</em>. We won't shy away from the topics in the previous paragraph, but we won't make idols of any patterns either. This book is meant to explore many different ways to improve code.</p>
+
+<p>Any coding style you fall in love with is bound to be someone else's heresy. JavaScript presents many opportunities for both.</p>
+
+<p>&nbsp;</p>
+</section>
+
+<section data-type="sect1" id="context-part-2-privacy-yPs0iX">
+<h1>Context Part 2: Privacy</h1>
+
+<p>The last topic in this chapter is that of "private" functions, and what that means in JavaScript. <em>Scope</em> is a broader topic of hiding and exposing behavior that we'll explore through examples later on. For now, we are only concerned with the privacy of functions, because as we noted earlier, private functions have unique implications for testing.</p>
+
+<p>Namely, some feel that private functions are "implementation details" and thus, do not require tests. If we accept that premise, then ideally we can hide most of our functionality in private functions and have less code exposed that we need to test. Less tests can mean less maintenance. Additionally, we can clearly separate our "public interface" from the rest of the code, which means anyone using our code can still benefit when learning or referencing a small part of it.</p>
+
+<p>So how do we create private functions? Pretending we don't know anything about objects for a minute, we could do this:</p>
+
+<pre data-type="programlisting">
+(function(){
+&nbsp; console.log('hi');
+})();
+</pre>
+
+<p>or this:</p>
+
+<pre data-type="programlisting">
+(function(){
+&nbsp; (function(){
+&nbsp;&nbsp;&nbsp; console.log('hi');
+&nbsp; })();
+})();
+</pre>
+
+<p>Here we have some anonymous functions. They are created, and then disappear. Any <code>this</code>'s we put inside would link back to the top level context. Since they're anonymous all they can do is run when we tell them to. Even if we know the <code>this</code> for anonymous functions, we can't run them (except for right away or as a callback), because they don't have a name and can't be addressed. Incidentally, these are called <em>IIFEs</em>, or "Immediately Invoked Function Expressions," and we'll talk about them more in Chapter 7.</p>
+
+<p>We'll explore a few more useful types of private functions in a minute, but first, we have a new piece to add to our diagrams. Both diagrams for these functions are the same (except for the lines of code, which you might argue is 5 rather than 3 for the second one).</p>
+
+<p>&nbsp;</p>
+
+<figure id="id-lPupc2iw"><img alt="" class="idiagramsfunction_anonymouspng" src="diagrams/function_anonymous.png">
+<figcaption><span class="label">Figure 5-17. </span>A "private" anonymous function</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_anonymous.png">&nbsp; function_anonymous.png</a></p>
+
+<p>What's new here is that we have a grey ring around the main circle to denote that this is a "private" function, and you may or may not want to (or be able to) test it. Any pie slices would still be apparent in a function with more code paths, and as with public functions, the slices would be greyed out when tested.</p>
+
+<p>Another way to design private methods is through the revealing module pattern.</p>
+
+<pre data-type="programlisting">
+var diary = (function(){
+&nbsp; var key = 12345;
+&nbsp; var secrets = 'rosebud';
+
+&nbsp; function privateUnlock(keyAttempt){
+&nbsp;&nbsp;&nbsp; if(key===keyAttempt){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('unlocked');
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; diary.open = true;
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no');
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+
+&nbsp; function privateTryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; privateUnlock(keyAttempt);
+&nbsp; };
+
+&nbsp; function privateRead(){
+&nbsp;&nbsp;&nbsp; if(this.open){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log(secrets);
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no');
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+
+&nbsp; return {
+&nbsp;&nbsp;&nbsp; open: false,
+&nbsp;&nbsp;&nbsp; read: privateRead,
+&nbsp;&nbsp;&nbsp; tryLock: privateTryLock
+&nbsp; }
+
+})();
+
+// run with
+diary.tryLock(12345);
+diary.read();
+</pre>
+
+<p>Reading this from top to bottom is a mistake. At its core, this is just creating an object with three properties, and assigning it to <code>diary</code>. You happen to be surrounding it with anonymous (and immediately executing) function, but that is just to create a context where we can hide things. The easiest way to read this function is to first look at the object that it returns. Otherwise, it's fairly similar to the last example in that all we're doing is wrapping some code with an anonymous function.</p>
+
+<p>The diary's first property is <code>open</code>, which is a boolean initially set to false. Then it has two other properties which map to function definitions provided above. The interesting part is that we have some things hidden in here. Neither the <code>key</code> and <code>secrets</code> variables, nor the <code>privateUnlock</code> function, have any way to be accessed directly through <code>diary</code>.</p>
+
+<p>One thing that may look strange is that in the "private" <code>privateUnlock</code> function, instead of <code>this.open</code>, we have <code>diary.open</code>. This is because when we are running <code>privateUnlock</code> via the <code>privateTryLock</code> function we lose our <code>this</code> context. To be clear, <code>this</code> is <code>diary</code> inside of the <code>privateTryLock</code> function, but the global object inside of <code>privateUnlock</code>.</p>
+
+<p>What would these functions look like as a Trellus Diagrams?</p>
+
+<figure id="id-Y5ueCXiR"><img alt="" class="idiagramsfunction_diary_readpng" src="diagrams/function_diary_read.png">
+<figcaption><span class="label">Figure 5-18. </span>The <code>read</code> function of <code>diary</code></figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_diary_read.png">&nbsp; function_diary_read.png</a></p>
+
+<p>The <code>read</code> function just points to <code>privateRead</code>, so we use that definition for our diagram. It takes no explicit parameters. Its <code>this</code> (the implicit parameter) is the <code>diary</code> object (that is returned from the anonymous function call). It returns <code>undefined</code> and calls <code>console.log</code> as a side effect. But what about <code>secrets</code>, the non-local input? It is tempting to think of secrets as part of the diary <em>object</em>, but it isn't. It's part of the <em>scope</em> that the object returned by <code>diary</code> was created inside of. Contrast <code>secrets</code> with <code>this.open</code>, which is an attribute of the <code>diary</code> <em>object</em> itself.</p>
+
+<figure id="id-m8uLU5iv"><img alt="" class="idiagramsfunction_diary_trylockpng" src="diagrams/function_diary_tryLock.png">
+<figcaption><span class="label">Figure 5-19. </span>The <code>tryLock</code> function of <code>diary</code></figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_diary_tryLock.png">&nbsp; function_diary_tryLock.png</a></p>
+
+<p>The <code>tryLock</code> function also just points to another function (<code>privateTryLock</code>), so we use that function definition. Like <code>read</code>, it has a non-local input, but this time, it is a function (<code>privateUnlock</code>) rather than a simple value (<code>secrets</code>) in <code>read</code>'s case. As far as the return values and side-effects, the function definition itself doesn't indicate it, but we don't have to work too hard to see what side-effects it has. However, in keeping with what most code-coverage tools would report, this function only has <em>one</em> code path, even though its side-effects depend on <em>two</em> paths inside of <code>privateUnlock</code>. Also to note, the same single code path would also be indicated by the diagram in the case that those two code paths affected the return value rather than or in addition to, the side-effects.</p>
+
+<p>Now let's look at <code>privateUnlock</code>:</p>
+
+<figure id="id-9KupFeib"><img alt="" class="idiagramsfunction_diary_privateunlockpng" src="diagrams/function_diary_privateUnlock.png">
+<figcaption><span class="label">Figure 5-20. </span>The <code>privateUnlock</code> function of <code>diary</code></figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_diary_privateUnlock.png">&nbsp; function_diary_privateUnlock.png</a></p>
+
+<p>This function's diagram looks a lot like <code>tryLock</code>. One major difference is that it has the grey circle wrapping its code paths. This indicates that we are considering it as a "private" function. We'll discuss this a bit more, but for now, here is a working idea of "private" functions in JavaScript: In JavaScript, there isn't really a good way to make private functions. Basically, you have variables and functions that are either in scope and addressable, or they aren't.</p>
+
+<p>Something else might have jumped out of the diagram as interesting. The <code>diary</code> object (that is used for <code>diary.open</code>) is not the function's <code>this</code>, nor is it an explicit input: It is a non-local input. The mechanism here is a bit tricky, but this should illustrate what's happening:</p>
+
+<pre data-type="programlisting">
+function hi(){
+  console.log(hello);
+};
+hi();
+
+//ReferenceError: hello is not defined
+
+var hello = "hi";
+hi();
+// logs "hi"
+</pre>
+
+<p>It seems weird that diary is in scope, and it might seem like it has something to do with the function it is declared inside of being assigned to diary:</p>
+
+<pre data-type="programlisting">
+var diary = (function(){
+  // does everyone in here know about diary?
+</pre>
+
+<p>But actually it works just like the <code>hi</code> function. When <code>privateUnlock</code> is declared, it doesn't know what <code>diary</code> is yet, but that doesn't matter. Once <code>diary</code> is declared at the top level scope, <em>everything</em> knows about it, including previously declared functions, which includes <code>privateUnlock</code>. This might still seem magical, but basically, you can declare non-local inputs to functions after those functions <em>are declared</em>. As long as the non-local inputs are in a scope that the function can access when the functions <em>are called</em>, you can still use them in the function declaration.</p>
+
+<p>If that doesn't sink in, it's alright. We're about to stop using <code>diary</code> in that function because its a little awkward (also, it is hardcoded and will break if we change the variable name).</p>
+
+<p>It is tempting to just expose the <code>privateUnlock</code> function to the object (adding another attribute to the returned object), we won't be able to keep it "private" (out of a directly addressable scope) that way.</p>
+
+<p>To get around the awkwardness of repeating a name as we are doing with <code>diary</code>, some people's first instinct is to pass along <code>this</code> with a variable called <code>that</code>.</p>
+
+<pre data-type="programlisting">
+var diary = (function(){
+&nbsp; var key = 12345;
+&nbsp; var secrets = 'programming is just syntactic sugar for labor';
+
+&nbsp; function privateUnlock(keyAttempt, that){
+&nbsp;&nbsp;&nbsp; if(key===keyAttempt){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('unlocked');
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; that.open = true;
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no');
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+
+&nbsp; function privateTryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; privateUnlock(keyAttempt, this);
+&nbsp; };
+
+&nbsp; function privateRead(){
+&nbsp;&nbsp;&nbsp; if(this.open){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log(secrets);
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no');
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }
+
+&nbsp; return {
+&nbsp;&nbsp;&nbsp; open: false,
+&nbsp;&nbsp;&nbsp; read: privateRead,
+&nbsp;&nbsp;&nbsp; tryLock: privateTryLock
+&nbsp; }
+
+})();
+</pre>
+
+<p>Let's see what that does to our diagram for <code>privateUnlock</code>:</p>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_diary_privateUnlock_2.png">&nbsp;function_diary_privateUnlock_2.png</a></p>
+
+<figure id="id-xNu7Fri8"><img alt="" class="idiagramsfunction_diary_privateunlock_2png" src="diagrams/function_diary_privateUnlock_2.png">
+<figcaption><span class="label">Figure 5-21. </span>With two explicit inputs</figcaption>
+</figure>
+
+<p>Nothing much has changed here. The only difference is that now we have two explicit inputs to the <code>privateUnlock</code> function and one non-local input, which is an improvement from before.</p>
+
+<div data-type="note" id="isnt-console-a-non-local-input-wBS8HliJ"><h6>Note</h6>
+<h1>Isn't <code>console</code> a non-local input?</h1>
+
+<p>In other words: Shouldn't it be listed on the right of the diagrams too?</p>
+
+<p>When it is used within the function, yes it does act as a non-local input. We've omitted it in these diagrams to simplify them, but by all means, when you're writing your own functions, add entries for <code>console</code> and anything else that's not <code>this</code> or passed in as an explicit parameter.</p>
+
+<p>Also realize that we're not adding non-local inputs for every global object and sub-object that we're <em>not</em> using. That would make the diagrams very noisy.</p>
+</div>
+
+<p>Alternatively, we can use one of our this-fixing functions: <code>call</code>, <code>apply</code> , or <code>bind</code>. For <code>call</code>, you would change <code>privateUnlock</code> and <code>privateTryLock</code> like this.</p>
+
+<pre data-type="programlisting">
+var diary = (function(){
+&nbsp; var key = 12345;
+&nbsp; var secrets = 'sitting for 8 hrs/day straight considered harmful';
+
+&nbsp; function privateUnlock(keyAttempt){
+&nbsp;&nbsp;&nbsp; if(key===keyAttempt){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('unlocked');
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.open = true;
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no');
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+
+&nbsp; function privateTryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; privateUnlock.call(this, keyAttempt);
+&nbsp; };
+
+&nbsp; function privateRead(){
+&nbsp;&nbsp;&nbsp; if(this.open){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log(secrets);
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no');
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }
+
+&nbsp; return {
+&nbsp;&nbsp;&nbsp; open: false,
+&nbsp;&nbsp;&nbsp; read: privateRead,
+&nbsp;&nbsp;&nbsp; tryLock: privateTryLock
+&nbsp; };
+
+})();
+</pre>
+
+<p>And in the <code>bind</code> version our <code>privateTryLock</code> function would look like this:</p>
+
+<pre data-type="programlisting">
+&nbsp; function privateTryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; var boundUnlock = privateUnlock.bind(this);
+&nbsp;&nbsp;&nbsp; boundUnlock(keyAttempt);
+&nbsp; };
+</pre>
+
+<p>Or we could inline that <code>boundUnlock</code> variable by calling the bound function right away.</p>
+
+<pre data-type="programlisting">
+&nbsp; function privateTryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; privateUnlock.bind(this)(keyAttempt);
+&nbsp; };</pre>
+
+<p>Which puts us back to being pretty similar to the <code>call</code> syntax.</p>
+
+<p>In any case, our diagrams for <code>privateUnlock</code> with the this-fixing in place shouldn't be too shocking:</p>
+
+<figure id="id-eVuMaSeik"><img alt="" class="idiagramsfunction_diary_privateunlock_3png" src="diagrams/function_diary_privateUnlock_3.png">
+<figcaption><span class="label">Figure 5-22. </span>One explicit paramter (<code>number</code>) and one implicit parameter (<code>diary</code>)</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/function_diary_privateUnlock_3.png">&nbsp; function_diary_privateUnlock_3.png</a></p>
+
+<p>Now our function has an implicit input of <code>diary</code>. <code>key</code> is still stuck as a non-local. It, like <code>secrets</code> and <code>privateUnlock</code>, are there for anyone to grab them up when the <code>diary</code>-creating anonymous function runs, but they aren't attached to any object (any <code>this</code>) of significance.</p>
+
+<p>Some variables (including functions) have a useful <code>this</code> that they are attached to. Others just have a scope where they are available and addressable.</p>
+
+<p>Before leaving our diary example, there's one important function that we've neglected to diagram: our diary creating function.</p>
+
+<figure id="id-8DunJHeip"><img alt="" class="idiagramsdiary_creating_functionpng" src="diagrams/diary_creating_function.png">
+<figcaption><span class="label">Figure 5-23. </span>The diary creating function is pretty simple</figcaption>
+</figure>
+
+<p><a class="list-padding" href="https://atlas.oreilly.com/oreillymedia/refactoring-javascript/editor/master/diagrams/diary_creating_function.png">&nbsp;diary_creating_function.png</a></p>
+
+<p>So it's actually what's not in this diagram that is what's surprising. First of all, the function is anonymous. It is the result of calling the function that is assigned to a variable called which happens to be called <code>diary</code>:</p>
+
+<pre class="drop-out-of-bounds drop-out-of-bounds-bottom drop-element-attached-top drop-element-attached-center drop-target-attached-bottom drop-target-attached-center" data-type="programlisting">
+var diary = (function(){</pre>
+
+<p>Similarly, the return type is an object: <code>{}</code>. We could get specific and say it returns an object with particular properties or we could say it's a <code>diary</code> object. However, it's worth highlighting that our function has no idea of what a <code>diary</code> is until after it's result is assigned to the variable.</p>
+
+<p>At this point, you might be wondering about classes. Maybe classes have some magical way to implement private methods? Nope. There have been proposals to ECMAScript petitioning for things like this, but as of this writing, they're still not a sure thing.</p>
+
+<p>If we were really insistent on this behavior for classes, how might we write it?</p>
+
+<pre data-type="programlisting">
+class Diary {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this.open = false;
+&nbsp;&nbsp;&nbsp; this._key = 12345;
+&nbsp;&nbsp;&nbsp; this._secrets = 'the average human lives around 1000 months';
+&nbsp; };
+
+&nbsp; _unlock(keyAttempt){
+&nbsp;&nbsp;&nbsp; if(this._key===keyAttempt){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('unlocked');
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; this.open = true;
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no')
+&nbsp;&nbsp;&nbsp; }
+&nbsp; };
+&nbsp; tryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; this._unlock(keyAttempt);
+&nbsp; };
+
+&nbsp; read(){
+&nbsp;&nbsp;&nbsp; if(this.open){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log(this._secrets);
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no');
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }
+}
+d = new Diary();
+d.tryLock(12345);
+d.read();
+</pre>
+
+<p>Now our "private" variables and <code>_unlock</code> function are exposed in the class. Also, we've prepended an underscore to indicate functions and variables that shouldn't be accessed directly. If we consider our private/underscore function to be a private implementation detail and therefore not requiring testing, we now have a visual cue to help us convey that to others and our future selves. On the other hand, in this form, our tests should be very easy to write because all of our "private" methods are still addressable.</p>
+
+<p>However, if we genuinely wanted to not expose our "hidden" information, we've failed. Let's take a step in what looks like the wrong direction.</p>
+
+<pre data-type="programlisting">
+var key = 12345;
+var secrets = 'rectangles are popular with people, but not nature';
+function globalUnlock(keyAttempt){
+&nbsp; if(key===keyAttempt){
+&nbsp;&nbsp;&nbsp; console.log('unlocked')
+&nbsp;&nbsp;&nbsp; this.open = true;
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; console.log('no')
+&nbsp; }
+};
+
+class Diary {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this.open = false;
+&nbsp; };
+&nbsp; tryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; globalUnlock.bind(this)(keyAttempt);
+&nbsp; };
+&nbsp; read(){
+&nbsp;&nbsp;&nbsp; if(this.open){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log(secrets);
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no')
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }
+};
+d = new Diary();
+d.tryLock(12345);
+d.read();
+</pre>
+
+<p>Now our hidden information is outside of our class. In fact, (assuming we're at the top level scope) we've created global variables! What good is that?</p>
+
+<p>Well, this is actually very close to something great that solves our problem in a different way. Save the following as <code>diary_module.js</code>.</p>
+
+<pre data-type="programlisting">
+var key = 12345;
+var secrets='how to win friends/influence people is for psychopaths';
+function globalUnlock(keyAttempt){
+&nbsp; if(key===keyAttempt){
+&nbsp;&nbsp;&nbsp; console.log('unlocked')
+&nbsp;&nbsp;&nbsp; this.open = true;
+&nbsp; }else{
+&nbsp;&nbsp;&nbsp; console.log('no')
+&nbsp; }
+};
+
+module.exports = class Diary {
+&nbsp; constructor(){
+&nbsp;&nbsp;&nbsp; this.open = false;
+&nbsp; };
+
+&nbsp; tryLock(keyAttempt){
+&nbsp;&nbsp;&nbsp; globalUnlock.bind(this)(keyAttempt);
+&nbsp; };
+
+&nbsp; read(){
+&nbsp;&nbsp;&nbsp; if(this.open){
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log(secrets);
+&nbsp;&nbsp;&nbsp; }else{
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; console.log('no')
+&nbsp;&nbsp;&nbsp; }
+&nbsp; }
+}
+</pre>
+
+<p>The only line we've changed is:</p>
+
+<pre data-type="programlisting">
+module.exports = class Diary {</pre>
+
+<p>To make use of this, we'll need another file (you can call it <code>diary_reader.js</code>) to import the module. Here's what that file looks like:</p>
+
+<pre class="pre drop-out-of-bounds drop-out-of-bounds-bottom drop-element-attached-top drop-element-attached-center drop-target-attached-bottom drop-target-attached-center" data-type="programlisting">
+const Diary = require('./diary_module.js');
+let d = new Diary();
+d.tryLock(12345);
+d.read();
+</pre>
+
+<p>In <em>this</em> file, between the <code>Diary</code> "class" or <code>d</code>, the "instance," we're not able to see the <code>key</code> or read the diary <code>secrets</code> without it. Unfortunately, this also means that if we want to test it using a similar <code>require</code> mechanism, we're stuck either going back to the prepended underscore technique, putting our "private" functions in their own modules somehow, or conditionally including them in for tests (and excluding them otherwise).</p>
+
+<p>&nbsp;</p>
+
+<section data-type="sect2" id="is-there-privacy-in-javascript-0lsDxunie">
+<h2>Is there privacy in JavaScript?</h2>
+
+<p>As of this writing, there is no real privacy in JavaScript. Things are either in scope, or they're not. Unfortunately, a desire to have an object, and simply declare some attributes as public and other as private is not really possible. Because every attribute (every property of an object) has a "this" that it attaches to, for functions to be "private" in JavaScript, they are necessarily also "inaccessible."</p>
+
+<p>So, practically speaking at this time, we have 2 conventions to choose from. The first is to give up on that dream and let attributes attach to some other <code>this</code>, with an eye toward the sub-conventions of doing it in a wrapping anonymous function (a la the "revealing module pattern"), or allowing this to attach to the global <code>this</code> for modules that are exported. Because exporting is a whitelisting operation, only the functions we specify will be imported by other scripts. This is handy for having a smaller API, but does complicate testing somewhat.</p>
+
+<p>The second (admittedly clunky) convention is to let our functions happily bind to the same <code>this</code> as public members, but giving visual cues (prefixing the function name with an <code>_</code> is the most common) to indicate when something is <em>intended</em> to be private.</p>
+
+<p>So for now, the meaning of "private" is more or less up to you, as well as how you decide that which you term "private."</p>
+
+<p>However, there are proposals from TC39 (the committee that evaluates and determines JavaScript features) related to privacy that are in the works. These include:</p>
+
+<ul>
+	<li><a href="http://github.com/tc39/proposal-private-fields/blob/master/STATIC.md">private fields</a></li>
+	<li><a href="http://github.com/tc39/proposal-private-fields/blob/master/METHODS.md">private methods</a></li>
+	<li><a href="http://github.com/tc39/proposal-private-fields/blob/master/STATIC.md">static fields and methods</a></li>
+</ul>
+
+<p>In this book, we're doing the same thing with these additions as we're doing with the likely forthcoming <code>async</code> and <code>await</code> features: we're mentioning them, but not going into detail. From the spec, this is the proposed new syntax as of this writing:</p>
+
+<pre data-type="programlisting">
+class Foo {
+&nbsp;&nbsp;#a;
+&nbsp;&nbsp;#b;
+&nbsp;&nbsp;#sum() { return #a + #b; }
+&nbsp;&nbsp;printSum() { console.log(#sum()); }
+&nbsp;&nbsp;constructor(a, b) { #a = a; #b = b; }
+};</pre>
+
+<p>So <code>#a</code> and <code>#b</code> are both private (non-function/method) "fields" and <code>#sum</code> is a private "method." These identifiers with a <code>#</code> would be unavailable outside of the <code>class</code> context block. So then a new <code>foo</code> instance of class <code>Foo</code> wouldn't have traditional property style access a la <code>foo.#a</code> (or maybe <code>foo.a</code>? We don't know, and we're assuming that wouldn't work anyways.), <code>foo.#b</code>, or <code>foo.#sum()</code>. However, <code>foo.printSum()</code> would be fine, since that's not private. Beyond that, details are sketchy at the moment (eg. does <code>foo.#a</code> throw an error? Can <code>a</code> and <code>#a</code> both be used as field names? Is there a workaround to access the private fields and methods for testing?).</p>
+
+<div data-type="note" id="method-vs-function-wBSJc3kSriP"><h6>Note</h6>
+<h1>"Method" vs "Function"</h1>
+
+<p>Throughout this book, we refer to JavaScript functions as being "functions." For some people, that implies functions in the sense of explicit inputs and output, whereas a "method" is used to mean some procedure or "just a chunk of code" that is attached to an object.</p>
+</div>
+
+<p>In any case, even without all of the facts in, the proposals for private fields and methods have implications for the future of JS generally:</p>
+
+<ul>
+	<li>Classes are getting more features that make unique constructs and not just "syntactic sugar" for constructor functions.</li>
+	<li>JavaScript is doubling down on OOP. Functional programming might be the "future," of JavaScript but OOP is at least <em>also</em> the future.</li>
+	<li>Choosing "your JavaScript" will likely again be proven to be a function of time. The JavaScript of 5 years ago is starting to look weird to modern eyes. It's likely that trend will continue.</li>
+	<li>If there is no workaround provided by the <code>#privateFunction</code> syntax, you might see people still preferring the <code>_privatefunction</code> underscore hack for backwards compatibility and in cases where testing private functions is desired.</li>
+</ul>
+
+<p>&nbsp;</p>
+</section>
+</section>
+
+<section data-type="sect1" id="wrapping-up-rbsBHe">
+<h1>Wrapping Up</h1>
+
+<p>In this chapter, we covered a lot of detail about how JavaScript works. We centered our conversation around functions, as they are the most important and complicated construct in JavaScript (in any paradigm worth pursuing).</p>
+
+<p>But as the goal was to be prescriptive, as well as descriptive, here are some takeaways worth repeating:</p>
+
+<ul>
+	<li>Try to keep bulk (complexity and lines of code) low.</li>
+	<li>Try to keep the total number of inputs low.</li>
+	<li>Prefer explicit inputs to non-local inputs.</li>
+	<li>Make choices between passing <code>this</code> explicitly vs. binding it to the function call, rather than hardcoding object names as non-local inputs.</li>
+	<li>Prefer real, meaningful return values to side-effects.</li>
+	<li>Keep side-effects to a minimum or non-existent.</li>
+	<li>Have a well-defined <code>this</code> when possible for functions and other variables (attributes) by making them part of classes (or at least objects) to cut down on non-local inputs and global variables.</li>
+	<li>In JavaScript, mechanisms for privacy necessarily impact access, which can complicate code, especially when it comes to testing.</li>
+</ul>
+
+<p>You should find these ideas help to make the code (as well as the diagrams) simpler.</p>
+
+<p>As a final note, the style that we used here is "this-friendly" as compared with some other approaches. In particular, using objects that change their values conflicts with aspects of the functional style we'll discuss in Chapter 11. In object-oriented (class or prototype based) style however, you will use <code>this</code> frequently.</p>
+</section>
+
+<p>&nbsp;</p>
+
+<p>&nbsp;</p>
+</section>
+
+<p>&nbsp;</p>
+
+<p>&nbsp;</p>
+
+  </body>
+</html>
