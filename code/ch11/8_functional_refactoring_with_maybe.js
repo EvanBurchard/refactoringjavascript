@@ -15,12 +15,11 @@ const capitalTiger = S.compose(capitalize, tigerify);
 const test = require('tape');
 test("Displaying a person", (assert) => {
   const personOne = new Person("tony");
-  assert.equal(S.fromMaybe('', personOne.name.map(capitalTiger)),
-               'Tony, the tiger');
+  assert.equal(personOne.name.chain(capitalTiger), 'Tony, the tiger');
   assert.end();
 });
 test("Displaying an anonymous person", (assert) => {
   const personTwo = new Person(null);
-  assert.equal(S.fromMaybe('', personTwo.name.map(capitalTiger)), '');
+  assert.equal(S.maybe('', capitalTiger, personTwo.name), '');
   assert.end();
 });
