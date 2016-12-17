@@ -57,11 +57,13 @@ testing -&gt; confidence -&gt; refactoring -&gt; quality
 <p>Also, you can always find an HTML version at http://refactoringjs.com.</p>
 </div>
 
-<p>After Chapter 5, things get harder, especially if you skipped 1-5. There's more code to write and follow along with. In Chapters 6 and 7, we go through refactoring functions and objects, and we don't shy away from some of the more complicated bits of JavaScript. Generally, the goal of these chapters is to provide options for improving code without radically changing the interface. Through applying techniques found in these two chapters, you'll be able to turn a mess of a codebase into one that has a decent baseline of quality.</p>
+<p>After Chapter 5, things get harder, especially if you skipped 1-5. There's more code to write and follow along with. In Chapters 6 and 7, we go through refactoring functions and objects, and we don't shy away from some of the more complicated bits of JavaScript. Generally, the goal of these chapters is to provide options for improving code without radically changing the interface. Through applying techniques found in these two chapters, you'll be able to turn a mess of a codebase into one that has a decent baseline of quality.&nbsp;</p>
 
-<p>Chapters 8, 9 and 10 are dedicated to specific topics (Design Patterns, Asynchronous Programming, and Functional Programming) that can take your code beyond that baseline, but necessarily involve more aggressive changes. With the design patterns in Chapter 8, we recognize ways to extend and draw from JavaScript's object-oriented side, as well a historical connection between refactoring and OOP. With Chapter 9, we deal with the reality that many JavaScript codebases have more than one thing to do at once. In Chapter 10, we take a tour of functional programming through a couple of libraries that provide useful interfaces which go beyond those that our standard Array functions (<code>forEach</code>, <code>map</code>, <code>reduce</code>, etc.) give us.</p>
+<p>Chapter 8 expands our view of architecture to those that include (or avoid) hierarchies.</p>
 
-<p>In some sense, those chapters break away from our initial goal to refactor by changing the <em>implementation details</em> without changing the <em>interface</em>. On the other hand, these interfaces are both useful and sometimes unavoidable. We could easily find wanting to write that is necessarily asynchronous for performance reasons. Or we could find ourselves "stuck" in a codebase that has much invested in <em>good or bad</em> attempts at OOP or FP. So either through our choice or by what we inherit, these are parts of JavaScript that we should pay attention to and be able to improve upon. If you adopt a completely different paradigm to a codebase, it is unlikely that you'll be "refactoring" in the sense that we mean throughout most of the book.</p>
+<p>Chapters 9, 10 and 11 are dedicated to specific topics (Design Patterns, Asynchronous Programming, and Functional Programming) that can take your code beyond that baseline, but necessarily involve more aggressive changes. With the design patterns in Chapter 9, we recognize ways to extend and draw from JavaScript's object-oriented side, as well a historical connection between refactoring and OOP. With Chapter 10, we deal with the reality that many JavaScript codebases have more than one thing to do at once. In Chapter 11, we take a tour of functional programming through a couple of libraries that provide useful interfaces which go beyond those that our standard Array functions (<code>forEach</code>, <code>map</code>, <code>reduce</code>, etc.) give us.</p>
+
+<p>In some sense, those last three chapters in particular break away from our initial goal to refactor by changing the <em>implementation details</em> without changing the <em>interface</em>. On the other hand, these interfaces are both useful and sometimes unavoidable. We could easily find wanting to write that is necessarily asynchronous for performance reasons. Or we could find ourselves "stuck" in a codebase that has much invested in <em>good or bad</em> attempts at OOP or FP. So either through our choice or by what we inherit, these are parts of JavaScript that we should pay attention to and be able to improve upon. If you adopt a completely different paradigm to a codebase, it is unlikely that you'll be "refactoring" in the sense that we mean throughout most of the book.</p>
 
 <p>If we want to be rigid about it, these chapters still refactor <em>within</em> their paradigms (OOP to better OOP, async to better async, and FP to better FP), and if we wish to think in the broadest terms about the execution of our program (e.g. "running <strong><code>node <em>myprogram.js</em></code></strong>" as <em>input</em> and "being satisfied with how it ran" as <em>output</em>) then we can be refactoring even while jumping from paradigm to paradigm. I encourage you to first work with a narrower sense of smaller, incremental changes that are easy to test and be confident in.</p>
 
@@ -287,14 +289,21 @@ testing -&gt; confidence -&gt; refactoring -&gt; quality
 And the rest of the O'Reilly staff that helped along the way: Annalis Clint, Nena Caviness, Michelle Gilliland, Rita Scordamalgia, Josh Garstka, and especially my editors, Nan Barber and Ally MacDonald.<br>
 <br>
 And to my technical reviewers: Steve Suering, Shelley Powers, Chris Deely, Darrell Heath, and Jade Applegate.
-<p>And to those whose work I found useful and inspirational: William F. Opdyke, Martin Fowler, Kent Beck, John Brant, Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides, Douglas Crockford, Tony Hoare, Alexis Deveria, Addy Osmani, Robert Nystrom, Brian Lonsdorf, Reginald Braithwaite, <span class="a-size-small a-color-secondary">Miran Lipovaca, Kyle Simpson, </span>Tom Stuart, Michael Fogus, David Chambers, Michael Hurley, Scott Sauyet, Yehuda Katz, Jay Fields, Shane Harvie, Russ Olsen, Joshua Kerievsky, <span class="vcard-fullname d-block">James Halliday, TJ Holowaychuk, Justin Searls, Eric Elliot, Jake Archibald, Arnau Sanchez</span>, Alex Chaffee, and Eric Hodel.</p>
+<p>And to those whose work I found useful and inspirational: William F. Opdyke, Martin Fowler, Kent Beck, John Brant, Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides, Douglas Crockford, Tony Hoare, Alexis Deveria, Addy Osmani, Robert Nystrom, Brian Lonsdorf, Reginald Braithwaite, <span class="a-size-small a-color-secondary">Miran Lipovaca, Kyle Simpson, </span>Tom Stuart, Michael Fogus, David Chambers, Michael Hurley, Scott Sauyet, Yehuda Katz, Jay Fields, Shane Harvie, Russ Olsen, Joshua Kerievsky, <span class="vcard-fullname d-block">James Halliday, TJ Holowaychuk, Justin Searls, Eric Elliot, Jake Archibald, Arnau Sanchez</span>, Alex Chaffee, Eric Hodel, Sean Hussey, Brian Cardarella, Foy Savas, and Katrina Owen, and Bryan Liles.</p>
+A special thanks to Dr. Axel Rauschmayer for his amazing work interpreting specs for us mere mortals, as well as providing the foreward to this book.
 
-<p>A special thanks to Dr. Axel Rauschmayer for his amazing work interpreting specs for us mere mortals, as well as providing the foreward to this book.</p>
+<div data-type="note" id="psst-hey-reader-p1uwcwtZ"><h6>Note</h6>
+<h1>Psst. Hey reader.</h1>
+
+<p>I know it looks like just a big list of names, but the people in this section are all really awesome. The resources in the appendix are less important than this list. A lot of these people made that stuff. And searching their names will let you know about their new stuff, which is probably better than their old stuff. Look these people up.</p>
+</div>
 
 <p>And thanks in general to all the people at TC39 and MDN.</p>
 
 <p>And to my dog for taking me on walks, even when I was right in the middle of something.</p>
-<!--Fill in...--></section>
+
+<p><!--Fill in...-->Also, to you. Thanks for supporting my work. Hit me up if you need anything.</p>
+</section>
 </section>
 
   </body>
