@@ -1,5 +1,4 @@
 const page = {
-  _events: [],
   say(string){
     console.log(string);
   },
@@ -36,17 +35,18 @@ const page = {
   loadTime(){
     return ((this._start - this._loaded) / 1000) + " seconds";
   },
-  _start: 'nothing yet',
-  _loaded: 'nothing yet',
   eventsSoFar(){
     console.info(this._events);
-  }
+  },
+  _events: [],
+  _start: 'nothing yet',
+  _loaded: 'nothing yet'
 };
 
 window.onload = function(){
   page._start = page.now(true);
   page._loaded = performance.timing.navigationStart;
-  document.onclick= function(event) {
+  document.onclick = function(event) {
     page._events.push(event.target + " clicked at " + page.now());
   };
 };
