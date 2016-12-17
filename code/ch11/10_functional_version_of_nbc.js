@@ -1,3 +1,4 @@
+//naive_bayes_functional.js
 R = require('ramda');
 
 const smoothing = 1.01;
@@ -8,13 +9,18 @@ function wordCountForLabel(testWord, relevantTexts){
 };
 
 function likelihoodOfWord(word, relevantTexts, numberOfTexts){
-  return wordCountForLabel(word, relevantTexts) / numberOfTexts + smoothing;
+  return wordCountForLabel(word,
+                           relevantTexts) / numberOfTexts + smoothing;
 };
 
 function likelihoodByLabel(label, newWords, trainedSet){
   const relevantTexts = textsForLabel(trainedSet.texts, label)
   const initialValue = trainedSet.probabilities[label] + smoothing;
-  const likelihood = R.product(newWords.map(newWord => likelihoodOfWord(newWord, relevantTexts, trainedSet.texts.length))) * initialValue;
+  const likelihood = R.product(
+    newWords.map(newWord =>
+      likelihoodOfWord(newWord,
+                       relevantTexts,
+                       trainedSet.texts.length))) * initialValue;
   return {[label]: likelihood}
 }
 
@@ -33,17 +39,19 @@ function addText(words, label, existingText = []){
 function train(allTexts) {
   const overTextLength = R.divide(R.__, allTexts.length);
   return {texts: allTexts,
-          probabilities: R.map(overTextLength, R.countBy(R.identity, R.pluck('label', allTexts)))};
+          probabilities: R.map(overTextLength,
+                               R.countBy(R.identity,
+                                         R.pluck('label', allTexts)))};
 };
 
 function classify(newWords, trainedSet){
   const labelNames = R.keys(trainedSet.probabilities);
-  return R.reduce((acc, label) => R.merge(acc, likelihoodByLabel(label, newWords, trainedSet)), {}, labelNames);
+  return R.reduce((acc, label) =>
+    R.merge(acc, likelihoodByLabel(label, newWords, trainedSet))
+            , {}, labelNames);
 };
 
 module.exports = {_allWords: _allWords,
                   addText: addText,
                   train: train,
                   classify: classify}
-
-

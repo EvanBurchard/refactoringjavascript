@@ -1,14 +1,15 @@
-const NB = require('./not_music.js');
+//naive_bayes_functional_test.js
+const NB = require('./10_functional_version_of_nbc.js');
 
 const wish = require('wish');
 describe('the file', () => {
-  const english = NB.addText(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-                      'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q'],
+  const english = NB.addText(['a', 'b', 'c', 'd', 'e', 'f', 'g',
+                      'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q'],
                       'yes')
   const moreEnglish = NB.addText(['a', 'e', 'i', 'o', 'u'],
                       'yes', english)
-  const allTexts = NB.addText(['あ', 	'い',	'う', 	'え', 	'お',
-                       'か', 	'き',	'く',	'け',	'こ'],
+  const allTexts = NB.addText(['あ',     'い',    'う',     'え',     'お',
+                       'か',     'き',    'く',    'け',    'こ'],
                        'no', moreEnglish)
 
   var trainedSet = NB.train(allTexts);
@@ -29,5 +30,4 @@ describe('the file', () => {
     wish(trainedSet.probabilities['yes'] === 0.6666666666666666);
     wish(trainedSet.probabilities['no'] === 0.3333333333333333);
   });
-})
-
+});
